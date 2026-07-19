@@ -1,137 +1,66 @@
 import { createClient } from "@/lib/supabase/server"
 import Link from "next/link"
+import { DataTable, Column } from "@/components/DataTable"
+
+type Producto = {
+  id: string
+  codigo: string
+  nombre: string
+  unidad_medida: string
+  costo_actual: number
+  precio_venta: number
+  iva: number
+  activo: boolean
+  categorias_productos: { nombre: string } | null
+}
+
+const columns: Column<Producto>[] = [
+  { key: "codigo", label: "Código" },
+  { key: "nombre", label: "Producto" },
+  { key: "categoria", label: "Categoría", render: (p) => p.categorias_productos?.nombre ?? "—" },
+  { key: "unidad_medida", label: "Unidad" },
+  { key: "costo_actual", label: "Costo", align: "right", render: (p) => `$${Number(p.costo_actual ?? 0).toLocaleString("es-AR")}` },
+  { key: "precio_venta", label: "Venta", align: "right", render: (p) => `$${Number(p.precio_venta ?? 0).toLocaleString("es-AR")}` },
+  { key: "iva", label: "IVA", align: "center", render: (p) => `${p.iva}%` },
+  { key: "activo", label: "Estado", align: "center", render: (p) => (p.activo ? "✅ Activo" : "❌ Inactivo") },
+]
 
 export default async function ProductosPage() {
   const supabase = await createClient()
-
-  const { data: productos, error } = await supabase
+  const { data, error } = await supabase
     .from("productos")
-    .select(`
-      id,
-      codigo,
-      nombre,
-      unidad_medida,
-      costo_actual,
-      precio_venta,
-      iva,
-      activo,
-      categorias_productos (
-        nombre
-      )
-    `)
+    .select(`id, codigo, nombre, unidad_medida, costo_actual, precio_venta, iva, activo, categorias_productos!inner (nombre)`)
     .order("nombre")
 
   if (error) {
-    console.log("Error cargando productos:", error)
+    return <div className="rounded-xl bg-red-50 p-4 text-red-700">Error cargando productos: {error.message}</div>
   }
+
+  const productos: Producto[] = (data ?? []).map((p) => ({
+    ...p,
+    categorias_productos: Array.isArray(p.categorias_productos)
+      ? p.categorias_productos[0] ?? null
+      : p.categorias_productos,
+  }))
 
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">
-            📦 Productos
-          </h1>
-
-          <p className="mt-2 text-gray-600">
-            Gestión de productos
-          </p>
+          <h1 className="text-3xl font-bold">📦 Productos</h1>
+          <p className="mt-2 text-gray-600">Gestión de productos</p>
         </div>
-
-        <Link
-          href="/productos/nuevo"
-          className="rounded bg-black px-4 py-2 text-white hover:opacity-80"
-        >
+        <Link href="/productos/nuevo" className="rounded bg-black px-4 py-2 text-white hover:opacity-80">
           + Nuevo producto
         </Link>
       </div>
 
-      <div className="overflow-hidden rounded-xl bg-white shadow">
-        <table className="w-full">
-
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="p-3 text-left">Código</th>
-              <th className="p-3 text-left">Producto</th>
-              <th className="p-3 text-left">Categoría</th>
-              <th className="p-3 text-left">Unidad</th>
-              <th className="p-3 text-right">Costo</th>
-              <th className="p-3 text-right">Venta</th>
-              <th className="p-3 text-center">IVA</th>
-              <th className="p-3 text-center">Estado</th>
-              <th className="p-3 text-center">Acciones</th>
-            </tr>
-          </thead>
-
-          <tbody>
-
-            {productos?.map((producto) => (
-
-              <tr
-                key={producto.id}
-                className="border-t"
-              >
-
-                <td className="p-3">
-                  {producto.codigo}
-                </td>
-
-                <td className="p-3 font-medium">
-                  {producto.nombre}
-                </td>
-
-                <td className="p-3">
-                  {producto.categorias_productos?.[0]?.nombre}
-                </td>
-
-                <td className="p-3">
-                  {producto.unidad_medida}
-                </td>
-
-                <td className="p-3 text-right">
-                  ${Number(producto.costo_actual ?? 0).toLocaleString("es-AR")}
-                </td>
-
-                <td className="p-3 text-right">
-                  ${Number(producto.precio_venta ?? 0).toLocaleString("es-AR")}
-                </td>
-
-                <td className="p-3 text-center">
-                  {producto.iva}%
-                </td>
-
-                <td className="p-3 text-center">
-                  {producto.activo ? "✅ Activo" : "❌ Inactivo"}
-                </td>
-
-                <td className="p-3">
-                  <div className="flex justify-center gap-2">
-
-                    <Link
-                      href={`/productos/${producto.id}`}
-                      className="rounded bg-gray-200 px-3 py-1 text-sm hover:bg-gray-300"
-                    >
-                      👁 Ver
-                    </Link>
-
-                    <Link
-                      href={`/productos/${producto.id}/editar`}
-                      className="rounded bg-blue-600 px-3 py-1 text-sm text-white hover:opacity-80"
-                    >
-                      ✏️ Editar
-                    </Link>
-
-                  </div>
-                </td>
-
-              </tr>
-
-            ))}
-
-          </tbody>
-
-        </table>
-      </div>
+      <DataTable
+        columns={columns}
+        data={productos}
+        onView={(p) => `/productos/${p.id}`}
+        onEdit={(p) => `/productos/${p.id}/editar`}
+      />
     </div>
   )
 }
