@@ -1,4 +1,4 @@
-import { logout } from "./actions"
+import { logout } from "./dashboard/actions"
 
 export default function DashboardLayout({
   children,
