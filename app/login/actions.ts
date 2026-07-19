@@ -15,12 +15,11 @@ export async function login(formData: FormData) {
   })
 
   if (error) {
-    return {
-      error: "Email o contraseña incorrectos",
-    }
+    console.log("Error login:", error.message)
+    return
   }
 
-  await supabase.auth.getUser()
+  console.log("Login correcto")
 
   redirect("/dashboard")
 }
