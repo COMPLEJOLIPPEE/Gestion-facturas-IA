@@ -2,6 +2,9 @@ import Link from "next/link";
 import { Package, Plus } from "lucide-react";
 
 import { Alert, Button } from "@/components/ui";
+import PageContainer from "@/components/layout/PageContainer";
+import PageHeader from "@/components/layout/PageHeader";
+
 import { createClient } from "@/lib/supabase/server";
 
 import { Producto } from "./columns";
@@ -48,34 +51,21 @@ export default async function ProductosPage() {
   }));
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="flex items-center gap-2 text-3xl font-bold">
-            <Package className="h-8 w-8" />
-            Productos
-          </h1>
-
-          <p className="mt-1 text-gray-600">
-            Gestión de productos
-          </p>
-        </div>
-
-        <Button
-          asChild
-          icon={<Plus className="h-4 w-4" />}
-        >
+    <PageContainer>
+      <PageHeader
+        title="Productos"
+        description="Gestión de productos"
+        actions={
           <Link href="/productos/nuevo">
-            Nuevo producto
+            <Button>
+              <Plus className="h-4 w-4" />
+              Nuevo producto
+            </Button>
           </Link>
-        </Button>
-      </div>
-
-      {/* Próximamente:
-          <TableToolbar />
-      */}
+        }
+      />
 
       <ProductosTable productos={productos} />
-    </div>
+    </PageContainer>
   );
 }

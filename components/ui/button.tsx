@@ -1,5 +1,4 @@
 import * as React from "react";
-import { Slot } from "@radix-ui/react-slot";
 import { Loader2 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -20,25 +19,20 @@ export interface ButtonProps
   variant?: ButtonVariant;
   size?: ButtonSize;
   loading?: boolean;
-  icon?: React.ReactNode;
   asChild?: boolean;
+  icon?: React.ReactNode;
 }
 
 const variants: Record<ButtonVariant, string> = {
-  primary:
-    "bg-blue-600 text-white hover:bg-blue-700",
+  primary: "bg-blue-600 text-white hover:bg-blue-700",
 
-  secondary:
-    "bg-gray-200 text-gray-900 hover:bg-gray-300",
+  secondary: "bg-gray-200 text-gray-900 hover:bg-gray-300",
 
-  success:
-    "bg-green-600 text-white hover:bg-green-700",
+  success: "bg-green-600 text-white hover:bg-green-700",
 
-  danger:
-    "bg-red-600 text-white hover:bg-red-700",
+  danger: "bg-red-600 text-white hover:bg-red-700",
 
-  warning:
-    "bg-yellow-500 text-white hover:bg-yellow-600",
+  warning: "bg-yellow-500 text-white hover:bg-yellow-600",
 };
 
 const sizes: Record<ButtonSize, string> = {
@@ -55,17 +49,46 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       size = "md",
       loading = false,
       disabled,
-      icon,
       asChild = false,
+      icon,
       children,
       ...props
     },
     ref
   ) => {
-    const Comp = asChild ? Slot : "button";
+    const buttonContent = (
+      <>
+        {loading && <Loader2 className="h-4 w-4 animate-spin" />}
+        {icon}
+        {children}
+      </>
+    );
+
+    if (asChild && React.isValidElement(children)) {
+      const child = children as React.ReactElement<any, any>;
+
+      return React.cloneElement(
+        child,
+        {
+          className: cn(
+            "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors",
+            "focus:outline-none focus:ring-2 focus:ring-blue-500",
+            "disabled:pointer-events-none disabled:opacity-50",
+            variants[variant],
+            sizes[size],
+            className,
+            typeof child.props.className === "string"
+              ? child.props.className
+              : undefined
+          ),
+          ...props,
+        },
+        buttonContent
+      );
+    }
 
     return (
-      <Comp
+      <button
         ref={ref}
         className={cn(
           "inline-flex items-center justify-center gap-2 rounded-lg font-medium transition-colors",
@@ -75,17 +98,11 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           sizes[size],
           className
         )}
-        disabled={!asChild ? disabled || loading : undefined}
+        disabled={disabled || loading}
         {...props}
       >
-        {loading ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          icon
-        )}
-
-        {children}
-      </Comp>
+        {buttonContent}
+      </button>
     );
   }
 );

@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { logout } from "./dashboard/actions"
 
 export default function DashboardLayout({
@@ -17,47 +18,47 @@ export default function DashboardLayout({
 
 <nav className="flex flex-col gap-3">
 
-  <a 
+  <Link 
     href="/dashboard"
     className="rounded p-2 hover:bg-gray-100"
   >
     📊 Dashboard
-  </a>
+  </Link>
 
-  <a 
+  <Link 
     href="/proveedores"
     className="rounded p-2 hover:bg-gray-100"
   >
     🚚 Proveedores
-  </a>
+  </Link>
 
-  <a 
+  <Link 
     href="/productos"
     className="rounded p-2 hover:bg-gray-100"
   >
     📦 Productos
-  </a>
+  </Link>
 
-  <a 
+  <Link 
     href="/facturas"
     className="rounded p-2 hover:bg-gray-100"
   >
     📄 Facturas
-  </a>
+  </Link>
 
-  <a 
+  <Link 
     href="/remitos"
     className="rounded p-2 hover:bg-gray-100"
   >
     📝 Remitos
-  </a>
+  </Link>
 
-  <a 
+  <Link 
     href="/pagos"
     className="rounded p-2 hover:bg-gray-100"
   >
     💰 Pagos
-  </a>
+  </Link>
 
 </nav>
 
