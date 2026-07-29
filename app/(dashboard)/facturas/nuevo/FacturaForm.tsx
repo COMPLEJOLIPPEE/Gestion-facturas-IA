@@ -1,7 +1,9 @@
 'use client'
 
-import { useState, useMemo } from "react"
+import { useState, useMemo, useRef } from "react"
 import { crearFactura } from "./actions"
+import { leerFacturaConIA } from "@/lib/ai/actions"
+import { matchearProducto } from "@/lib/ai/matchear-producto"
 
 type Proveedor = { id: string; nombre_fantasia: string }
 type Empresa = { id: string; razon_social: string }
@@ -12,18 +14,36 @@ type Linea = {
   cantidad: number
   precio_unitario: number
   iva: number
+  descripcionLeida?: string
+  autoMatcheado?: boolean
 }
+
+type FormaPago = { id: string; nombre: string }
 
 export function FacturaForm({
   proveedores,
   empresas,
   productos,
+  formasPago,
 }: {
   proveedores: Proveedor[]
   empresas: Empresa[]
   productos: Producto[]
+  formasPago: FormaPago[]
 }) {
   const [lineas, setLineas] = useState<Linea[]>([])
+  const [pagarAlCargar, setPagarAlCargar] = useState(false)
+  const [montoPago, setMontoPago] = useState<number>(0)
+  const [pagoTocado, setPagoTocado] = useState(false)
+
+  const [proveedorId, setProveedorId] = useState("")
+  const [numero, setNumero] = useState("")
+  const [fecha, setFecha] = useState("")
+  const [fechaVencimiento, setFechaVencimiento] = useState("")
+
+  const [leyendoIA, setLeyendoIA] = useState(false)
+  const [errorIA, setErrorIA] = useState<string | null>(null)
+  const inputArchivoRef = useRef<HTMLInputElement>(null)
 
   const agregarLinea = () => {
     setLineas((prev) => [...prev, { producto_id: "", cantidad: 1, precio_unitario: 0, iva: 21 }])
@@ -63,6 +83,61 @@ export function FacturaForm({
     return { subtotal, iva: ivaTotal, total: subtotal + ivaTotal }
   }, [lineas])
 
+  const montoPagoMostrado = pagoTocado ? montoPago : total
+
+  const archivoABase64 = (file: File): Promise<string> =>
+    new Promise((resolve, reject) => {
+      const reader = new FileReader()
+      reader.onload = () => {
+        const resultado = reader.result as string
+        resolve(resultado.split(",")[1] ?? "")
+      }
+      reader.onerror = reject
+      reader.readAsDataURL(file)
+    })
+
+  const manejarArchivoIA = async (file: File) => {
+    setLeyendoIA(true)
+    setErrorIA(null)
+    try {
+      const base64 = await archivoABase64(file)
+      const datos = await leerFacturaConIA(base64, file.type)
+
+      if (datos.proveedor_nombre) {
+        const proveedorMatch = matchearProducto(
+          datos.proveedor_nombre,
+          proveedores.map((p) => ({ id: p.id, nombre: p.nombre_fantasia }))
+        )
+        if (proveedorMatch) setProveedorId(proveedorMatch.id)
+      }
+
+      if (datos.numero) setNumero(datos.numero)
+      if (datos.fecha) setFecha(datos.fecha)
+      if (datos.fecha_vencimiento) setFechaVencimiento(datos.fecha_vencimiento)
+
+      if (datos.lineas.length > 0) {
+        setLineas(
+          datos.lineas.map((l) => {
+            const match = matchearProducto(l.descripcion, productos)
+            return {
+              producto_id: match?.id ?? "",
+              cantidad: l.cantidad || 1,
+              precio_unitario: l.precio_unitario || 0,
+              iva: l.iva ?? match?.iva ?? 21,
+              descripcionLeida: l.descripcion,
+              autoMatcheado: Boolean(match),
+            }
+          })
+        )
+      }
+    } catch (err) {
+      setErrorIA(err instanceof Error ? err.message : "No se pudo leer el comprobante")
+    } finally {
+      setLeyendoIA(false)
+      if (inputArchivoRef.current) inputArchivoRef.current.value = ""
+    }
+  }
+
   return (
     <form action={crearFactura} className="space-y-6">
       <input type="hidden" name="items" value={JSON.stringify(lineas)} />
@@ -70,10 +145,36 @@ export function FacturaForm({
       <input type="hidden" name="iva" value={iva} />
       <input type="hidden" name="total" value={total} />
 
+      <div className="rounded-xl bg-white p-6 shadow">
+        <label className="block text-sm font-medium">✨ Cargar con IA</label>
+        <p className="mt-1 text-xs text-gray-500">
+          Subí una foto o el PDF de la factura y se autocompletan los datos abajo para que los revises.
+        </p>
+        <input
+          ref={inputArchivoRef}
+          type="file"
+          accept="application/pdf,image/*"
+          disabled={leyendoIA}
+          onChange={(e) => {
+            const file = e.target.files?.[0]
+            if (file) manejarArchivoIA(file)
+          }}
+          className="mt-3 text-sm"
+        />
+        {leyendoIA && <p className="mt-2 text-sm text-gray-500">Leyendo comprobante…</p>}
+        {errorIA && <p className="mt-2 text-sm text-red-600">{errorIA}</p>}
+      </div>
+
       <div className="grid gap-4 rounded-xl bg-white p-6 shadow md:grid-cols-2">
         <div>
           <label className="block text-sm text-gray-600">Proveedor</label>
-          <select name="proveedor_id" required className="mt-1 w-full rounded border p-2">
+          <select
+            name="proveedor_id"
+            value={proveedorId}
+            onChange={(e) => setProveedorId(e.target.value)}
+            required
+            className="mt-1 w-full rounded border p-2"
+          >
             <option value="">Seleccionar proveedor</option>
             {proveedores.map((p) => (
               <option key={p.id} value={p.id}>
@@ -97,17 +198,35 @@ export function FacturaForm({
 
         <div>
           <label className="block text-sm text-gray-600">Número de factura</label>
-          <input name="numero" className="mt-1 w-full rounded border p-2" />
+          <input
+            name="numero"
+            value={numero}
+            onChange={(e) => setNumero(e.target.value)}
+            className="mt-1 w-full rounded border p-2"
+          />
         </div>
 
         <div>
           <label className="block text-sm text-gray-600">Fecha</label>
-          <input type="date" name="fecha" required className="mt-1 w-full rounded border p-2" />
+          <input
+            type="date"
+            name="fecha"
+            value={fecha}
+            onChange={(e) => setFecha(e.target.value)}
+            required
+            className="mt-1 w-full rounded border p-2"
+          />
         </div>
 
         <div>
           <label className="block text-sm text-gray-600">Fecha de vencimiento</label>
-          <input type="date" name="fecha_vencimiento" className="mt-1 w-full rounded border p-2" />
+          <input
+            type="date"
+            name="fecha_vencimiento"
+            value={fechaVencimiento}
+            onChange={(e) => setFechaVencimiento(e.target.value)}
+            className="mt-1 w-full rounded border p-2"
+          />
         </div>
       </div>
 
@@ -140,19 +259,34 @@ export function FacturaForm({
 
         {lineas.map((linea, index) => (
           <div key={index} className="mb-3 grid grid-cols-12 items-center gap-2">
-            <select
-              value={linea.producto_id}
-              onChange={(e) => actualizarProductoDeLinea(index, e.target.value)}
-              className="col-span-4 rounded border p-2"
-              required
-            >
-              <option value="">Producto</option>
-              {productos.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.codigo ? `${p.codigo} — ` : ""}{p.nombre}
-                </option>
-              ))}
-            </select>
+            <div className="col-span-4">
+              <select
+                value={linea.producto_id}
+                onChange={(e) => actualizarProductoDeLinea(index, e.target.value)}
+                className="w-full rounded border p-2"
+                required
+              >
+                <option value="">Producto</option>
+                {productos.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.codigo ? `${p.codigo} — ` : ""}{p.nombre}
+                  </option>
+                ))}
+              </select>
+              {linea.descripcionLeida && (
+                <p className="mt-1 text-xs">
+                  {linea.autoMatcheado ? (
+                    <span className="rounded bg-green-100 px-1.5 py-0.5 text-green-700">
+                      ✓ coincidencia automática — &ldquo;{linea.descripcionLeida}&rdquo;
+                    </span>
+                  ) : (
+                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-700">
+                      sin coincidencia — &ldquo;{linea.descripcionLeida}&rdquo;, elegí el producto
+                    </span>
+                  )}
+                </p>
+              )}
+            </div>
 
             <input
               type="number"
@@ -215,6 +349,58 @@ export function FacturaForm({
           </div>
         </div>
       </div>
+
+      <div className="rounded-xl bg-white p-6 shadow">
+        <label className="flex items-center gap-2 text-sm font-medium">
+          <input
+            type="checkbox"
+            checked={pagarAlCargar}
+            onChange={(e) => setPagarAlCargar(e.target.checked)}
+          />
+          Marcar como pagado al cargar
+        </label>
+
+        {pagarAlCargar && (
+          <div className="mt-4 grid gap-4 md:grid-cols-3">
+            <div>
+              <label className="block text-sm text-gray-600">Monto pagado</label>
+              <input
+                type="number"
+                name="pago_monto"
+                step="0.01"
+                min="0.01"
+                value={montoPagoMostrado}
+                onChange={(e) => {
+                  setPagoTocado(true)
+                  setMontoPago(Number(e.target.value))
+                }}
+                required={pagarAlCargar}
+                className="mt-1 w-full rounded border p-2"
+              />
+              <p className="mt-1 text-xs text-gray-400">Total de la factura: ${total.toLocaleString("es-AR")}</p>
+            </div>
+
+            <div>
+              <label className="block text-sm text-gray-600">Forma de pago</label>
+              <select name="pago_forma_pago_id" required={pagarAlCargar} className="mt-1 w-full rounded border p-2">
+                <option value="">Seleccionar forma de pago</option>
+                {formasPago.map((f) => (
+                  <option key={f.id} value={f.id}>
+                    {f.nombre}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div>
+              <label className="block text-sm text-gray-600">Fecha de pago</label>
+              <input type="date" name="pago_fecha" required={pagarAlCargar} className="mt-1 w-full rounded border p-2" />
+            </div>
+          </div>
+        )}
+      </div>
+
+      <input type="hidden" name="pagar_al_cargar" value={pagarAlCargar ? "1" : ""} />
 
       <button
         type="submit"

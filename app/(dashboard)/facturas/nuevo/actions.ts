@@ -1,6 +1,7 @@
 'use server'
 
 import { createClient } from "@/lib/supabase/server"
+import { registrarPago } from "@/lib/pagos"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
@@ -73,6 +74,24 @@ export async function crearFactura(formData: FormData) {
         costo_actual: item.precio_unitario,
       })
       .eq("id", item.producto_id)
+  }
+
+  const pagarAlCargar = formData.get("pagar_al_cargar") === "1"
+  if (pagarAlCargar) {
+    const montoPago = Number(formData.get("pago_monto"))
+    const formaPagoId = (formData.get("pago_forma_pago_id") as string) || null
+    const fechaPago = formData.get("pago_fecha") as string
+
+    await registrarPago(supabase, {
+      tipo: "factura",
+      comprobanteId: factura.id,
+      monto: montoPago,
+      formaPagoId,
+      fecha: fechaPago,
+    })
+
+    revalidatePath("/pagos")
+    revalidatePath("/dashboard")
   }
 
   revalidatePath("/facturas")

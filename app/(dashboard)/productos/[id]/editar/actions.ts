@@ -10,7 +10,6 @@ export async function actualizarProducto(id: string, formData: FormData) {
   const { error } = await supabase
     .from("productos")
     .update({
-      codigo: formData.get("codigo") as string,
       nombre: formData.get("nombre") as string,
       unidad_medida: formData.get("unidad_medida") as string,
       categoria_id: (formData.get("categoria_id") as string) || null,

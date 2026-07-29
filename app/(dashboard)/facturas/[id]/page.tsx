@@ -1,5 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { notFound } from "next/navigation"
+import { PagoInlineForm } from "@/components/PagoInlineForm"
+import { registrarPagoFactura } from "./actions"
 
 type Props = {
   params: Promise<{ id: string }>
@@ -42,6 +44,19 @@ export default async function FacturaDetallePage({ params }: Props) {
     ...item,
     productos: Array.isArray(item.productos) ? item.productos[0] ?? null : item.productos,
   }))
+
+  const [{ data: pagos }, { data: formasPago }] = await Promise.all([
+    supabase
+      .from("pagos")
+      .select("id, monto, fecha, formas_pago (nombre)")
+      .eq("factura_id", id)
+      .order("fecha", { ascending: false }),
+    supabase.from("formas_pago").select("id, nombre").order("nombre"),
+  ])
+
+  const totalPagado = (pagos ?? []).reduce((acc, p) => acc + Number(p.monto ?? 0), 0)
+  const saldoPendiente = Math.max(Number(factura.total ?? 0) - totalPagado, 0)
+  const registrarPago = registrarPagoFactura.bind(null, factura.id)
 
   return (
     <div>
@@ -117,6 +132,45 @@ export default async function FacturaDetallePage({ params }: Props) {
             </div>
           </div>
         </div>
+      </div>
+
+      <div className="mt-6 rounded-xl bg-white p-6 shadow">
+        <div className="mb-4 flex items-center justify-between">
+          <h2 className="text-lg font-semibold">Pagos</h2>
+          <p className="text-sm text-gray-500">
+            Pagado: ${totalPagado.toLocaleString("es-AR")} · Saldo: ${saldoPendiente.toLocaleString("es-AR")}
+          </p>
+        </div>
+
+        {(pagos ?? []).length > 0 && (
+          <table className="mb-4 w-full text-sm">
+            <thead>
+              <tr className="text-left text-gray-500">
+                <th className="pb-2">Fecha</th>
+                <th className="pb-2">Forma de pago</th>
+                <th className="pb-2 text-right">Monto</th>
+              </tr>
+            </thead>
+            <tbody>
+              {(pagos ?? []).map((p) => {
+                const formaPago = Array.isArray(p.formas_pago) ? p.formas_pago[0] : p.formas_pago
+                return (
+                  <tr key={p.id} className="border-t">
+                    <td className="py-2">{new Date(p.fecha).toLocaleDateString("es-AR")}</td>
+                    <td className="py-2">{formaPago?.nombre ?? "—"}</td>
+                    <td className="py-2 text-right">${Number(p.monto ?? 0).toLocaleString("es-AR")}</td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        )}
+
+        {saldoPendiente > 0 ? (
+          <PagoInlineForm saldo={saldoPendiente} formasPago={formasPago ?? []} action={registrarPago} />
+        ) : (
+          <p className="text-sm text-green-600">✅ Factura totalmente pagada.</p>
+        )}
       </div>
     </div>
   )

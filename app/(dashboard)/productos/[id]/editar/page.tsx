@@ -111,7 +111,7 @@ export default async function EditarProducto({ params }: Props) {
         </div>
 
         <label className="flex items-center gap-2">
-          <input type="checkbox" name="activo" defaultChecked={producto.activo} />
+          <input type="checkbox" name="activo" defaultChecked={Boolean(producto.activo)} />
           <span className="text-sm text-gray-600">Activo</span>
         </label>
 
