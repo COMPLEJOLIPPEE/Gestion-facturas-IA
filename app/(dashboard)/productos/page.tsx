@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Package, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 
 import { Alert, Button } from "@/components/ui";
 import PageContainer from "@/components/layout/PageContainer";
@@ -22,7 +22,6 @@ export default async function ProductosPage() {
       unidad_medida,
       costo_actual,
       precio_venta,
-      iva,
       activo,
       categorias_productos (nombre)
     `)
@@ -43,7 +42,6 @@ export default async function ProductosPage() {
     unidad_medida: p.unidad_medida ?? "",
     costo_actual: p.costo_actual ?? 0,
     precio_venta: p.precio_venta ?? 0,
-    iva: p.iva ?? 0,
     activo: Boolean(p.activo),
     categorias_productos: Array.isArray(p.categorias_productos)
       ? p.categorias_productos[0] ?? null

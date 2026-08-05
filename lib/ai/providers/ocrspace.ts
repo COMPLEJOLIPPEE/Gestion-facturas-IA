@@ -24,6 +24,8 @@ export async function extraerConOCRSpace(
   mimeType: string,
   tipo: TipoComprobanteIA
 ): Promise<ComprobanteExtraido> {
+  void tipo
+
   const formData = new FormData()
   formData.append("base64Image", `data:${mimeType};base64,${base64}`)
   formData.append("language", "spa")

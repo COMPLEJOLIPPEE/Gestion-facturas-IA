@@ -115,7 +115,7 @@ export default async function ProveedoresPage() {
         <Button
           asChild
           icon={<Plus className="h-4 w-4" />}
-        >
+          >
           <Link href="/proveedores/nuevo">
             Nuevo proveedor
           </Link>

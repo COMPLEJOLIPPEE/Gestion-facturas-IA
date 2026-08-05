@@ -3,6 +3,10 @@
 :root {
   --background: #ffffff;
   --foreground: #000000;
+  --text-muted: #475569;
+  --text-muted-strong: #334155;
+  --text-muted-soft: #64748b;
+  --text-muted-xsoft: #94a3b8;
 }
 
 @theme inline {
@@ -16,35 +20,60 @@
   :root {
     --background: #0a0a0a;
     --foreground: #000000;
+    --text-muted: #cbd5e1;
+    --text-muted-strong: #94a3b8;
+    --text-muted-soft: #cbd5e1;
+    --text-muted-xsoft: #e2e8f0;
   }
 }
 
 body {
   background: var(--background);
-  color: var(--foreground);
+  color: var(--foreground) !important;
   font-family: Arial, Helvetica, sans-serif;
 }
 
-/* Force all common text colors to black */
-.text-black,
-.text-gray-900,
-.text-zinc-950,
-.text-zinc-900,
-.text-zinc-700,
-.text-zinc-600,
-.text-zinc-500,
-.text-zinc-400,
-.text-zinc-300,
-.text-gray-700,
-.text-gray-600,
-.text-gray-500,
-.text-gray-400,
-.text-gray-300,
-.text-zinc-50 {
-  color: var(--foreground) !important;
+html,
+body,
+* {
+  color: #000000 !important;
 }
 
-/* Preserve button and badge text when explicitly white */
-.text-white {
-  color: #ffffff !important;
+*::placeholder {
+  color: #000000 !important;
+}
+
+/* Override Tailwind grayscale text colors to use the project palette */
+.text-gray-900,
+.text-zinc-950,
+.text-black {
+  color: #000000 !important;
+}
+
+.text-white,
+.text-gray-50,
+.text-zinc-50 {
+  color: var(--text-muted-strong) !important;
+}
+
+.text-gray-700,
+.text-gray-600,
+.text-zinc-700,
+.text-zinc-600 {
+  color: var(--text-muted-strong) !important;
+}
+
+.text-gray-500,
+.text-zinc-500 {
+  color: var(--text-muted) !important;
+}
+
+.text-gray-400,
+.text-zinc-400 {
+  color: var(--text-muted-soft) !important;
+}
+
+.text-gray-300,
+.text-zinc-300 {
+  color: var(--text-muted-xsoft) !important;
 }

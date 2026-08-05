@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import Link from "next/link"
 import { DataTable, Column } from "@/components/DataTable"
+import { formatDateAR } from "@/lib/utils"
 
 type Factura = {
   id: string
@@ -15,11 +16,11 @@ type Factura = {
 const columns: Column<Factura>[] = [
   { key: "numero", label: "Número" },
   { key: "proveedor", label: "Proveedor", render: (f) => f.proveedores?.nombre_fantasia ?? "—" },
-  { key: "fecha", label: "Fecha", render: (f) => new Date(f.fecha).toLocaleDateString("es-AR") },
+  { key: "fecha", label: "Fecha", render: (f) => formatDateAR(f.fecha) },
   {
     key: "fecha_vencimiento",
     label: "Vencimiento",
-    render: (f) => (f.fecha_vencimiento ? new Date(f.fecha_vencimiento).toLocaleDateString("es-AR") : "—"),
+    render: (f) => formatDateAR(f.fecha_vencimiento),
   },
   { key: "total", label: "Total", align: "right", render: (f) => `$${Number(f.total ?? 0).toLocaleString("es-AR")}` },
   { key: "estado", label: "Estado", align: "center", render: (f) => f.estado ?? "—" },

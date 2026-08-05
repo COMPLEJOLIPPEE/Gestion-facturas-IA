@@ -8,7 +8,6 @@ export type Producto = {
   unidad_medida: string;
   costo_actual: number;
   precio_venta: number;
-  iva: number;
   activo: boolean;
   categorias_productos: {
     nombre: string;
@@ -19,6 +18,12 @@ export const columns: Column<Producto>[] = [
   {
     key: "codigo",
     label: "Código",
+    render: (p) =>
+      p.codigo?.trim() ? (
+        p.codigo
+      ) : (
+        <span className="text-gray-400">—</span>
+      ),
   },
   {
     key: "nombre",
@@ -28,10 +33,14 @@ export const columns: Column<Producto>[] = [
     key: "categoria",
     label: "Categoría",
     render: (p) =>
-      p.categorias_productos?.nombre ?? (
-        <span className="text-gray-400 italic">
+      p.categorias_productos?.nombre ? (
+        <Badge variant="secondary">
+          {p.categorias_productos.nombre}
+        </Badge>
+      ) : (
+        <Badge variant={"outline" as any}>
           Sin categoría
-        </span>
+        </Badge>
       ),
   },
   {
@@ -51,12 +60,6 @@ export const columns: Column<Producto>[] = [
     align: "right",
     render: (p) =>
       `$${Number(p.precio_venta ?? 0).toLocaleString("es-AR")}`,
-  },
-  {
-    key: "iva",
-    label: "IVA",
-    align: "center",
-    render: (p) => `${p.iva}%`,
   },
   {
     key: "activo",

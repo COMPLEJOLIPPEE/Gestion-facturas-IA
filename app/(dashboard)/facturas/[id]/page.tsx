@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { notFound } from "next/navigation"
 import { PagoInlineForm } from "@/components/PagoInlineForm"
+import { formatDateAR } from "@/lib/utils"
 import { registrarPagoFactura } from "./actions"
 
 type Props = {
@@ -72,12 +73,12 @@ export default async function FacturaDetallePage({ params }: Props) {
         </div>
         <div>
           <p className="text-sm text-gray-500">Fecha</p>
-          <p className="font-medium">{new Date(factura.fecha).toLocaleDateString("es-AR")}</p>
+          <p className="font-medium">{formatDateAR(factura.fecha)}</p>
         </div>
         <div>
           <p className="text-sm text-gray-500">Vencimiento</p>
           <p className="font-medium">
-            {factura.fecha_vencimiento ? new Date(factura.fecha_vencimiento).toLocaleDateString("es-AR") : "—"}
+            {formatDateAR(factura.fecha_vencimiento)}
           </p>
         </div>
         <div>
@@ -156,7 +157,7 @@ export default async function FacturaDetallePage({ params }: Props) {
                 const formaPago = Array.isArray(p.formas_pago) ? p.formas_pago[0] : p.formas_pago
                 return (
                   <tr key={p.id} className="border-t">
-                    <td className="py-2">{new Date(p.fecha).toLocaleDateString("es-AR")}</td>
+                    <td className="py-2">{formatDateAR(p.fecha)}</td>
                     <td className="py-2">{formaPago?.nombre ?? "—"}</td>
                     <td className="py-2 text-right">${Number(p.monto ?? 0).toLocaleString("es-AR")}</td>
                   </tr>

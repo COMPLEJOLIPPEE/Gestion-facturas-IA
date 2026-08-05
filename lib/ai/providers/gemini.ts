@@ -3,21 +3,28 @@ import type { ComprobanteExtraido, TipoComprobanteIA } from "../tipos"
 
 const schema = { /* igual que antes */ }
 
+function isServiceUnavailable(error: unknown) {
+  if (!error || typeof error !== "object") return false
+
+  const { code, message } = error as { code?: unknown; message?: unknown }
+  return code === 503 || (typeof message === "string" && message.includes("UNAVAILABLE"))
+}
+
 async function withRetry<T>(fn: () => Promise<T>, retries = 3, delayMs = 2000): Promise<T> {
-  let lastError: any
+  let lastError: unknown
   for (let i = 0; i < retries; i++) {
     try {
       return await fn()
-    } catch (err: any) {
-      lastError = err
-      if (err.message?.includes("UNAVAILABLE") || err.code === 503) {
+    } catch (error) {
+      lastError = error
+      if (isServiceUnavailable(error)) {
         await new Promise((res) => setTimeout(res, delayMs))
       } else {
-        throw err
+        throw error
       }
     }
   }
-  throw lastError
+  throw lastError instanceof Error ? lastError : new Error("Gemini no respondió tras varios intentos")
 }
 
 export async function extraerConGemini(

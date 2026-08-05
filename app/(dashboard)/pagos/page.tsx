@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import Link from "next/link"
 import { DataTable, Column } from "@/components/DataTable"
+import { formatDateAR } from "@/lib/utils"
 
 type Pago = {
   id: string
@@ -22,7 +23,7 @@ function proveedorDe(comprobante: ComprobanteRef) {
 }
 
 const columns: Column<Pago>[] = [
-  { key: "fecha", label: "Fecha", render: (p) => new Date(p.fecha).toLocaleDateString("es-AR") },
+  { key: "fecha", label: "Fecha", render: (p) => formatDateAR(p.fecha) },
   { key: "tipo", label: "Tipo", render: (p) => (p.tipo === "Factura" ? "📄 Factura" : "📝 Remito") },
   { key: "numero", label: "Número", render: (p) => p.numero ?? "—" },
   { key: "proveedor", label: "Proveedor" },

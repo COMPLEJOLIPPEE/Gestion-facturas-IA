@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import Link from "next/link"
 import { DataTable, Column } from "@/components/DataTable"
+import { formatDateAR } from "@/lib/utils"
 
 type Remito = {
   id: string
@@ -15,11 +16,11 @@ type Remito = {
 const columns: Column<Remito>[] = [
   { key: "numero", label: "Número" },
   { key: "proveedor", label: "Proveedor", render: (r) => r.proveedores?.nombre_fantasia ?? "—" },
-  { key: "fecha", label: "Fecha", render: (r) => new Date(r.fecha).toLocaleDateString("es-AR") },
+  { key: "fecha", label: "Fecha", render: (r) => formatDateAR(r.fecha) },
   {
     key: "fecha_vencimiento",
     label: "Vencimiento",
-    render: (r) => (r.fecha_vencimiento ? new Date(r.fecha_vencimiento).toLocaleDateString("es-AR") : "—"),
+    render: (r) => formatDateAR(r.fecha_vencimiento),
   },
   { key: "monto_total", label: "Monto", align: "right", render: (r) => `$${Number(r.monto_total ?? 0).toLocaleString("es-AR")}` },
   { key: "estado", label: "Estado", align: "center", render: (r) => r.estado ?? "—" },

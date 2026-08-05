@@ -1,6 +1,7 @@
 import { createClient } from "@/lib/supabase/server"
 import { DataTable, Column } from "@/components/DataTable"
 import { ComprasChart, ComprasPorMes } from "@/components/ComprasChart"
+import { addLocalDays, formatDateAR, toLocalDateKey } from "@/lib/utils"
 
 type Movimiento = {
   id: string
@@ -45,7 +46,7 @@ function monthRange(offset: number) {
   const now = new Date()
   const start = new Date(now.getFullYear(), now.getMonth() + offset, 1)
   const end = new Date(now.getFullYear(), now.getMonth() + offset + 1, 1)
-  return { start: start.toISOString().slice(0, 10), end: end.toISOString().slice(0, 10) }
+  return { start: toLocalDateKey(start), end: toLocalDateKey(end) }
 }
 
 const MESES_CORTOS = ["Ene", "Feb", "Mar", "Abr", "May", "Jun", "Jul", "Ago", "Sep", "Oct", "Nov", "Dic"]
@@ -61,8 +62,8 @@ export default async function DashboardPage() {
   const prevMonth = monthRange(-1)
   const sixMonthsAgo = monthRange(-5)
   const now = new Date()
-  const today = now.toISOString().slice(0, 10)
-  const in15Days = new Date(now.getTime() + 15 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  const today = toLocalDateKey(now)
+  const in15Days = toLocalDateKey(addLocalDays(now, 15))
 
   const [
     facturasMes,
@@ -234,7 +235,7 @@ export default async function DashboardPage() {
     { key: "tipo", label: "Tipo", render: (m) => (m.tipo === "Factura" ? "📄 Factura" : "📝 Remito") },
     { key: "numero", label: "Número", render: (m) => m.numero ?? "—" },
     { key: "proveedor", label: "Proveedor" },
-    { key: "fecha", label: "Fecha", render: (m) => new Date(m.fecha).toLocaleDateString("es-AR") },
+    { key: "fecha", label: "Fecha", render: (m) => formatDateAR(m.fecha) },
     { key: "monto", label: "Monto", align: "right", render: (m) => formatMoney(m.monto) },
   ]
 
@@ -288,7 +289,7 @@ export default async function DashboardPage() {
         const vencida = v.fecha_vencimiento < today
         return (
           <span className={vencida ? "font-medium text-red-600" : ""}>
-            {new Date(v.fecha_vencimiento).toLocaleDateString("es-AR")}
+            {formatDateAR(v.fecha_vencimiento)}
             {vencida ? " (vencida)" : ""}
           </span>
         )
