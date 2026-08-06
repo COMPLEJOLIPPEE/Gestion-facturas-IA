@@ -99,17 +99,6 @@ export default async function EditarProducto({ params }: Props) {
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm text-gray-600">IVA (%)</label>
-          <input
-            type="number"
-            step="0.01"
-            name="iva"
-            defaultValue={producto.iva ?? 0}
-            className="mt-1 w-full rounded border p-2"
-          />
-        </div>
-
         <label className="flex items-center gap-2">
           <input type="checkbox" name="activo" defaultChecked={Boolean(producto.activo)} />
           <span className="text-sm text-gray-600">Activo</span>

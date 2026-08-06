@@ -1,5 +1,8 @@
 import { Plus } from "lucide-react";
 
+import PageContainer from "@/components/layout/PageContainer";
+import PageHeader from "@/components/layout/PageHeader";
+
 import { createClient } from "@/lib/supabase/server";
 
 import Form from "./form";
@@ -18,22 +21,19 @@ export default async function NuevoProveedorPage() {
   }
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="flex items-center gap-2 text-3xl font-bold">
-          <Plus className="h-8 w-8" />
-          Nuevo proveedor
-        </h1>
-
-        <p className="mt-1 text-gray-600">
-          Complete los datos para registrar un nuevo proveedor.
-        </p>
+    <PageContainer>
+      <div className="flex items-center gap-3">
+        <Plus className="h-6 w-6" />
+        <PageHeader
+          title="Nuevo proveedor"
+          description="Complete los datos para registrar un nuevo proveedor."
+        />
       </div>
 
       <Form
         categorias={categorias ?? []}
         action={crearProveedor}
       />
-    </div>
+    </PageContainer>
   );
 }

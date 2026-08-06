@@ -55,9 +55,7 @@ export default function Form({
         className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
         required
       >
-        <option value="">
-          Seleccionar categoría
-        </option>
+        <option value="">Seleccionar categoría</option>
 
         {categorias.map((categoria) => (
           <option
@@ -69,6 +67,54 @@ export default function Form({
         ))}
       </select>
 
+      <select
+        name="condicion_iva"
+        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+      >
+        <option value="">Condición IVA</option>
+        <option>Responsable Inscripto</option>
+        <option>Monotributista</option>
+        <option>Exento</option>
+        <option>Consumidor Final</option>
+      </select>
+
+      <select
+        name="condicion_pago"
+        className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-500"
+      >
+        <option value="">Condición de pago</option>
+        <option>Contado</option>
+        <option>7 días</option>
+        <option>15 días</option>
+        <option>30 días</option>
+        <option>Transferencia</option>
+      </select>
+
+      <div className="grid grid-cols-2 gap-4">
+        <Input
+          type="number"
+          step="0.01"
+          min="0"
+          name="iibb_bsas"
+          placeholder="IIBB Buenos Aires (%)"
+          defaultValue={0}
+        />
+
+        <Input
+          type="number"
+          step="0.01"
+          min="0"
+          name="iibb_caba"
+          placeholder="IIBB CABA (%)"
+          defaultValue={0}
+        />
+      </div>
+
+      <Input
+        name="otros_cargos"
+        placeholder="Otros cargos habituales"
+      />
+
       <Input
         name="etiqueta_1"
         placeholder="Etiqueta 1"
@@ -77,11 +123,6 @@ export default function Form({
       <Input
         name="etiqueta_2"
         placeholder="Etiqueta 2"
-      />
-
-      <Input
-        name="condicion_pago"
-        placeholder="Condición de pago"
       />
 
       <SubmitButton>

@@ -80,6 +80,7 @@ export default function Form({
           <Input
             type="number"
             step="0.01"
+            min="0"
             name="costo_actual"
             defaultValue={0}
           />
@@ -93,23 +94,11 @@ export default function Form({
           <Input
             type="number"
             step="0.01"
+            min="0"
             name="precio_venta"
             defaultValue={0}
           />
         </div>
-      </div>
-
-      <div>
-        <label className="mb-1 block text-sm font-medium text-gray-700">
-          IVA
-        </label>
-
-        <Input
-          type="number"
-          step="0.01"
-          name="iva"
-          defaultValue={21}
-        />
       </div>
 
       <label className="flex items-center gap-2 text-sm font-medium">

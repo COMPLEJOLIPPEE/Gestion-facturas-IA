@@ -1,8 +1,11 @@
 import Link from "next/link";
-import { Truck, Plus } from "lucide-react";
+import { Plus, Truck } from "lucide-react";
 
 import { Alert, Badge, Button } from "@/components/ui";
 import { DataTable, Column } from "@/components/DataTable";
+import PageContainer from "@/components/layout/PageContainer";
+import PageHeader from "@/components/layout/PageHeader";
+
 import { createClient } from "@/lib/supabase/server";
 
 type Proveedor = {
@@ -30,22 +33,29 @@ const columns: Column<Proveedor>[] = [
   {
     key: "categoria",
     label: "Categoría",
-    render: (p) =>
-      p.categorias_proveedor?.nombre ?? (
-        <span className="italic text-gray-400">
-          Sin categoría
-        </span>
-      ),
+    render: (p) => (
+      <Badge variant="secondary">
+        {p.categorias_proveedor?.nombre ?? "Sin categoría"}
+      </Badge>
+    ),
   },
   {
     key: "etiquetas",
     label: "Etiquetas",
     render: (p) => (
-      <>
-        {p.etiqueta_1}
-        {p.etiqueta_1 && p.etiqueta_2 && <br />}
-        {p.etiqueta_2}
-      </>
+      <div className="space-y-1">
+        {p.etiqueta_1 && (
+          <Badge variant="info">{p.etiqueta_1}</Badge>
+        )}
+
+        {p.etiqueta_2 && (
+          <Badge variant="secondary">{p.etiqueta_2}</Badge>
+        )}
+
+        {!p.etiqueta_1 && !p.etiqueta_2 && (
+          <span className="text-gray-400">—</span>
+        )}
+      </div>
     ),
   },
   {
@@ -99,28 +109,20 @@ export default async function ProveedoresPage() {
   }));
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="flex items-center gap-2 text-3xl font-bold">
-            <Truck className="h-8 w-8" />
-            Proveedores
-          </h1>
-
-          <p className="mt-1 text-gray-600">
-            Gestión de proveedores.
-          </p>
-        </div>
-
-        <Button
-          asChild
-          icon={<Plus className="h-4 w-4" />}
-          >
+    <PageContainer>
+      <PageHeader
+        title="Proveedores"
+        description="Gestión de proveedores"
+        icon={<Truck className="h-6 w-6" />}
+        actions={
           <Link href="/proveedores/nuevo">
-            Nuevo proveedor
+            <Button>
+              <Plus className="mr-2 h-4 w-4" />
+              Nuevo proveedor
+            </Button>
           </Link>
-        </Button>
-      </div>
+        }
+      />
 
       <DataTable
         columns={columns}
@@ -128,6 +130,6 @@ export default async function ProveedoresPage() {
         onView={(p) => `/proveedores/${p.id}`}
         onEdit={(p) => `/proveedores/${p.id}/editar`}
       />
-    </div>
+    </PageContainer>
   );
 }

@@ -1,368 +1,379 @@
 'use client'
 
-import { useState, useMemo, useRef } from "react"
+import { useMemo, useRef, useState } from "react"
+
 import { crearRemito } from "./actions"
-import { leerRemitoConIA } from "@/lib/ai/actions"
+
+import CargaIA from "./components/CargaIA"
+import DatosComprobante from "./components/DatosComprobante"
+import ProductosRemito, {
+  LineaFactura,
+} from "./components/ProductosRemito"
+import PagoRemito from "./components/PagoRemito"
+import { leerFacturaConIA } from "@/lib/ai/actions"
 import { matchearProducto } from "@/lib/ai/matchear-producto"
 
-type Proveedor = { id: string; nombre_fantasia: string }
-type Empresa = { id: string; razon_social: string }
-type Producto = { id: string; nombre: string; codigo: string | null }
-
-type Linea = {
-  producto_id: string
-  cantidad: number
-  precio_unitario: number
-  descripcionLeida?: string
-  autoMatcheado?: boolean
+type Proveedor = {
+  id: string
+  nombre_fantasia: string
 }
 
-type FormaPago = { id: string; nombre: string }
+type Empresa = {
+  id: string
+  razon_social: string
+}
+
+type Producto = {
+  id: string
+  nombre: string
+  codigo: string | null
+}
+
+type FormaPago = {
+  id: string
+  nombre: string
+}
+
+type Props = {
+  proveedores: Proveedor[]
+  empresas: Empresa[]
+  productos: Producto[]
+  formasPago: FormaPago[]
+}
 
 export function RemitoForm({
   proveedores,
   empresas,
   productos,
   formasPago,
-}: {
-  proveedores: Proveedor[]
-  empresas: Empresa[]
-  productos: Producto[]
-  formasPago: FormaPago[]
-}) {
-  const [lineas, setLineas] = useState<Linea[]>([])
-  const [pagarAlCargar, setPagarAlCargar] = useState(false)
-  const [montoPago, setMontoPago] = useState<number>(0)
-  const [pagoTocado, setPagoTocado] = useState(false)
+}: Props) {
+
+  const [lineas, setLineas] = useState<LineaFactura[]>([])
 
   const [proveedorId, setProveedorId] = useState("")
   const [numero, setNumero] = useState("")
   const [fecha, setFecha] = useState("")
-  const [fechaVencimiento, setFechaVencimiento] = useState("")
+  const [fechaVencimiento, setFechaVencimiento] =
+    useState("")
 
-  const [leyendoIA, setLeyendoIA] = useState(false)
-  const [errorIA, setErrorIA] = useState<string | null>(null)
-  const inputArchivoRef = useRef<HTMLInputElement>(null)
+  const [leyendoIA, setLeyendoIA] =
+    useState(false)
+
+  const [errorIA, setErrorIA] =
+    useState<string | null>(null)
+
+  const inputArchivoRef =
+    useRef<HTMLInputElement>(null)
+
+  const [pagarAlCargar, setPagarAlCargar] =
+    useState(false)
+
+  const [montoPago, setMontoPago] =
+    useState(0)
+
+  const [pagoTocado, setPagoTocado] =
+    useState(false)
 
   const agregarLinea = () => {
-    setLineas((prev) => [...prev, { producto_id: "", cantidad: 1, precio_unitario: 0 }])
+    setLineas((prev) => [
+      ...prev,
+      {
+        producto_id: "",
+        cantidad: 1,
+        precio_unitario: 0,
+        iva: 21,
+      },
+    ])
   }
 
   const quitarLinea = (index: number) => {
-    setLineas((prev) => prev.filter((_, i) => i !== index))
-  }
-
-  const actualizarLinea = (index: number, campo: keyof Linea, valor: string | number) => {
     setLineas((prev) =>
-      prev.map((linea, i) => (i === index ? { ...linea, [campo]: valor } : linea))
+      prev.filter((_, i) => i !== index)
     )
   }
 
-  const montoTotal = useMemo(() => {
-    return lineas.reduce((acc, linea) => acc + linea.cantidad * linea.precio_unitario, 0)
-  }, [lineas])
-
-  const montoPagoMostrado = pagoTocado ? montoPago : montoTotal
-
-  const archivoABase64 = (file: File): Promise<string> =>
-    new Promise((resolve, reject) => {
-      const reader = new FileReader()
-      reader.onload = () => {
-        const resultado = reader.result as string
-        resolve(resultado.split(",")[1] ?? "")
-      }
-      reader.onerror = reject
-      reader.readAsDataURL(file)
-    })
-
-  const manejarArchivoIA = async (file: File) => {
-    setLeyendoIA(true)
-    setErrorIA(null)
-    try {
-      const base64 = await archivoABase64(file)
-      const datos = await leerRemitoConIA(base64, file.type)
-
-      if (datos.proveedor_nombre) {
-        const proveedorMatch = matchearProducto(
-          datos.proveedor_nombre,
-          proveedores.map((p) => ({ id: p.id, nombre: p.nombre_fantasia }))
-        )
-        if (proveedorMatch) setProveedorId(proveedorMatch.id)
-      }
-
-      if (datos.numero) setNumero(datos.numero)
-      if (datos.fecha) setFecha(datos.fecha)
-      if (datos.fecha_vencimiento) setFechaVencimiento(datos.fecha_vencimiento)
-
-      if (datos.lineas.length > 0) {
-        setLineas(
-          datos.lineas.map((l) => {
-            const match = matchearProducto(l.descripcion, productos)
-            return {
-              producto_id: match?.id ?? "",
-              cantidad: l.cantidad || 1,
-              precio_unitario: l.precio_unitario || 0,
-              descripcionLeida: l.descripcion,
-              autoMatcheado: Boolean(match),
+  const actualizarLinea = (
+    index: number,
+    campo: keyof LineaFactura,
+    valor: string | number
+  ) => {
+    setLineas((prev) =>
+      prev.map((linea, i) =>
+        i === index
+          ? {
+              ...linea,
+              [campo]: valor,
             }
-          })
-        )
-      }
-    } catch (err) {
-      setErrorIA(err instanceof Error ? err.message : "No se pudo leer el comprobante")
-    } finally {
-      setLeyendoIA(false)
-      if (inputArchivoRef.current) inputArchivoRef.current.value = ""
-    }
+          : linea
+      )
+    )
   }
 
-  return (
-    <form action={crearRemito} className="space-y-6">
-      <input type="hidden" name="items" value={JSON.stringify(lineas)} />
-      <input type="hidden" name="monto_total" value={montoTotal} />
+  const actualizarProductoDeLinea = (
+    index: number,
+    productoId: string
+  ) => {
+    setLineas((prev) =>
+      prev.map((linea, i) =>
+        i === index
+          ? {
+              ...linea,
+              producto_id: productoId,
+            }
+          : linea
+      )
+    )
+  }
 
-      <div className="rounded-xl bg-white p-6 shadow">
-        <label className="block text-sm font-medium">✨ Cargar con IA</label>
-        <p className="mt-1 text-xs text-gray-500">
-          Subí una foto o el PDF del remito y se autocompletan los datos abajo para que los revises.
-        </p>
-        <input
-          ref={inputArchivoRef}
-          type="file"
-          accept="application/pdf,image/*"
-          disabled={leyendoIA}
-          onChange={(e) => {
-            const file = e.target.files?.[0]
-            if (file) manejarArchivoIA(file)
-          }}
-          className="mt-3 text-sm"
-        />
-        {leyendoIA && <p className="mt-2 text-sm text-gray-500">Leyendo comprobante…</p>}
-        {errorIA && <p className="mt-2 text-sm text-red-600">{errorIA}</p>}
-      </div>
+  const {
+    subtotal,
+    iva,
+    total,
+  } = useMemo(() => {
 
-      <div className="grid gap-4 rounded-xl bg-white p-6 shadow md:grid-cols-2">
-        <div>
-          <label className="block text-sm text-gray-600">Proveedor</label>
-          <select
-            name="proveedor_id"
-            value={proveedorId}
-            onChange={(e) => setProveedorId(e.target.value)}
-            required
-            className="mt-1 w-full rounded border p-2"
-          >
-            <option value="">Seleccionar proveedor</option>
-            {proveedores.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.nombre_fantasia}
-              </option>
-            ))}
-          </select>
-        </div>
+    let subtotal = 0
+    let ivaTotal = 0
 
-        <div>
-          <label className="block text-sm text-gray-600">Empresa</label>
-          <select name="empresa_id" required className="mt-1 w-full rounded border p-2">
-            <option value="">Seleccionar empresa</option>
-            {empresas.map((e) => (
-              <option key={e.id} value={e.id}>
-                {e.razon_social}
-              </option>
-            ))}
-          </select>
-        </div>
+    lineas.forEach((linea) => {
 
-        <div>
-          <label className="block text-sm text-gray-600">Número de remito</label>
-          <input
-            name="numero"
-            value={numero}
-            onChange={(e) => setNumero(e.target.value)}
-            className="mt-1 w-full rounded border p-2"
-          />
-        </div>
+      const importe =
+        linea.cantidad *
+        linea.precio_unitario
 
-        <div>
-          <label className="block text-sm text-gray-600">Fecha</label>
-          <input
-            type="date"
-            name="fecha"
-            value={fecha}
-            onChange={(e) => setFecha(e.target.value)}
-            required
-            className="mt-1 w-full rounded border p-2"
-          />
-        </div>
+      subtotal += importe
 
-        <div>
-          <label className="block text-sm text-gray-600">Fecha de vencimiento</label>
-          <input
-            type="date"
-            name="fecha_vencimiento"
-            value={fechaVencimiento}
-            onChange={(e) => setFechaVencimiento(e.target.value)}
-            className="mt-1 w-full rounded border p-2"
-          />
-        </div>
-      </div>
+      ivaTotal +=
+        importe *
+        (linea.iva / 100)
 
-      <div className="rounded-xl bg-white p-6 shadow">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Productos</h2>
-          <button
-            type="button"
-            onClick={agregarLinea}
-            className="rounded bg-gray-200 px-3 py-1 text-sm hover:bg-gray-300"
-          >
-            + Agregar línea
-          </button>
-        </div>
+    })
 
-        {lineas.length === 0 && (
-          <p className="text-sm text-gray-500">Todavía no agregaste ningún producto.</p>
-        )}
+    return {
+      subtotal,
+      iva: ivaTotal,
+      total: subtotal + ivaTotal,
+    }
 
-        {lineas.length > 0 && (
-          <div className="mb-2 grid grid-cols-12 gap-2 px-1 text-xs font-medium text-gray-500">
-            <span className="col-span-5">Producto</span>
-            <span className="col-span-2">Cantidad</span>
-            <span className="col-span-3">Precio unitario</span>
-            <span className="col-span-1 text-right">Subtotal</span>
-            <span className="col-span-1"></span>
-          </div>
-        )}
+  }, [lineas])
 
-        {lineas.map((linea, index) => (
-          <div key={index} className="mb-3 grid grid-cols-12 items-center gap-2">
-            <div className="col-span-5">
-              <select
-                value={linea.producto_id}
-                onChange={(e) => actualizarLinea(index, "producto_id", e.target.value)}
-                className="w-full rounded border p-2"
-                required
-              >
-                <option value="">Producto</option>
-                {productos.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.codigo ? `${p.codigo} — ` : ""}{p.nombre}
-                  </option>
-                ))}
-              </select>
-              {linea.descripcionLeida && (
-                <p className="mt-1 text-xs">
-                  {linea.autoMatcheado ? (
-                    <span className="rounded bg-green-100 px-1.5 py-0.5 text-green-700">
-                      ✓ coincidencia automática — &ldquo;{linea.descripcionLeida}&rdquo;
-                    </span>
-                  ) : (
-                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-amber-700">
-                      sin coincidencia — &ldquo;{linea.descripcionLeida}&rdquo;, elegí el producto
-                    </span>
-                  )}
-                </p>
-              )}
-            </div>
+  const montoPagoMostrado =
+    pagoTocado
+      ? montoPago
+      : total
 
-            <input
-              type="number"
-              step="0.01"
-              placeholder="Cantidad"
-              value={linea.cantidad}
-              onChange={(e) => actualizarLinea(index, "cantidad", Number(e.target.value))}
-              className="col-span-2 rounded border p-2"
-              required
-            />
+  const archivoABase64 = (
+    file: File
+  ): Promise<string> =>
+    new Promise((resolve, reject) => {
 
-            <input
-              type="number"
-              step="0.01"
-              placeholder="Precio unitario"
-              value={linea.precio_unitario}
-              onChange={(e) => actualizarLinea(index, "precio_unitario", Number(e.target.value))}
-              className="col-span-3 rounded border p-2"
-              required
-            />
+      const reader =
+        new FileReader()
 
-            <span className="col-span-1 text-right text-sm text-gray-600">
-              ${(linea.cantidad * linea.precio_unitario).toLocaleString("es-AR")}
-            </span>
+      reader.onload = () => {
 
-            <button
-              type="button"
-              onClick={() => quitarLinea(index)}
-              className="col-span-1 text-red-600 hover:text-red-800"
-            >
-              ✕
-            </button>
-          </div>
-        ))}
+        const resultado =
+          reader.result as string
 
-        <div className="mt-6 flex justify-end">
-          <div className="w-64 text-sm">
-            <div className="flex justify-between font-semibold">
-              <span>Total</span>
-              <span>${montoTotal.toLocaleString("es-AR")}</span>
-            </div>
-          </div>
-        </div>
-      </div>
+        resolve(
+          resultado.split(",")[1] ?? ""
+        )
 
-      <div className="rounded-xl bg-white p-6 shadow">
-        <label className="flex items-center gap-2 text-sm font-medium">
-          <input
-            type="checkbox"
-            checked={pagarAlCargar}
-            onChange={(e) => setPagarAlCargar(e.target.checked)}
-          />
-          Marcar como pagado al cargar
-        </label>
+      }
 
-        {pagarAlCargar && (
-          <div className="mt-4 grid gap-4 md:grid-cols-3">
-            <div>
-              <label className="block text-sm text-gray-600">Monto pagado</label>
-              <input
-                type="number"
-                name="pago_monto"
-                step="0.01"
-                min="0.01"
-                value={montoPagoMostrado}
-                onChange={(e) => {
-                  setPagoTocado(true)
-                  setMontoPago(Number(e.target.value))
-                }}
-                required={pagarAlCargar}
-                className="mt-1 w-full rounded border p-2"
-              />
-              <p className="mt-1 text-xs text-gray-400">Total del remito: ${montoTotal.toLocaleString("es-AR")}</p>
-            </div>
+      reader.onerror = reject
 
-            <div>
-              <label className="block text-sm text-gray-600">Forma de pago</label>
-              <select name="pago_forma_pago_id" required={pagarAlCargar} className="mt-1 w-full rounded border p-2">
-                <option value="">Seleccionar forma de pago</option>
-                {formasPago.map((f) => (
-                  <option key={f.id} value={f.id}>
-                    {f.nombre}
-                  </option>
-                ))}
-              </select>
-            </div>
+      reader.readAsDataURL(file)
 
-            <div>
-              <label className="block text-sm text-gray-600">Fecha de pago</label>
-              <input type="date" name="pago_fecha" required={pagarAlCargar} className="mt-1 w-full rounded border p-2" />
-            </div>
-          </div>
-        )}
-      </div>
+    })
 
-      <input type="hidden" name="pagar_al_cargar" value={pagarAlCargar ? "1" : ""} />
+  async function manejarArchivoIA(
+    file: File
+  ) {
+
+    setLeyendoIA(true)
+    setErrorIA(null)
+
+    try {
+
+      const base64 =
+        await archivoABase64(file)
+
+      const datos =
+        await leerFacturaConIA(
+          base64,
+          file.type
+        )
+
+      if (datos.proveedor_nombre) {
+
+        const proveedor =
+          matchearProducto(
+            datos.proveedor_nombre,
+            proveedores.map((p) => ({
+              id: p.id,
+              nombre: p.nombre_fantasia,
+            }))
+          )
+
+        if (proveedor) {
+          setProveedorId(proveedor.id)
+        }
+
+      }
+
+      if (datos.numero)
+        setNumero(datos.numero)
+
+      if (datos.fecha)
+        setFecha(datos.fecha)
+
+      if (datos.fecha_vencimiento)
+        setFechaVencimiento(
+          datos.fecha_vencimiento
+        )
+
+      if (datos.lineas.length > 0) {
+
+        setLineas(
+
+          datos.lineas.map((l) => {
+
+            const match =
+              matchearProducto(
+                l.descripcion,
+                productos
+              )
+
+            return {
+
+              producto_id:
+                match?.id ?? "",
+
+              cantidad:
+                l.cantidad || 1,
+
+              precio_unitario:
+                l.precio_unitario || 0,
+
+              iva:
+                l.iva ?? 21,
+
+              descripcionLeida:
+                l.descripcion,
+
+              autoMatcheado:
+                Boolean(match),
+
+            }
+
+          })
+
+        )
+
+      }
+
+    } catch (error) {
+
+      setErrorIA(
+        error instanceof Error
+          ? error.message
+          : "No se pudo leer la factura."
+      )
+
+    } finally {
+
+      setLeyendoIA(false)
+
+      if (inputArchivoRef.current) {
+        inputArchivoRef.current.value = ""
+      }
+
+    }
+
+  }
+    return (
+    <form
+      action={crearRemito}
+      className="space-y-6"
+    >
+      <input
+        type="hidden"
+        name="items"
+        value={JSON.stringify(lineas)}
+      />
+
+      <input
+        type="hidden"
+        name="subtotal"
+        value={subtotal}
+      />
+
+      <input
+        type="hidden"
+        name="iva"
+        value={iva}
+      />
+
+      <input
+        type="hidden"
+        name="total"
+        value={total}
+      />
+
+      <CargaIA
+        inputArchivoRef={inputArchivoRef}
+        leyendoIA={leyendoIA}
+        errorIA={errorIA}
+        manejarArchivoIA={manejarArchivoIA}
+      />
+
+      <DatosComprobante
+        proveedores={proveedores}
+        empresas={empresas}
+        proveedorId={proveedorId}
+        setProveedorId={setProveedorId}
+        numero={numero}
+        setNumero={setNumero}
+        fecha={fecha}
+        setFecha={setFecha}
+        fechaVencimiento={fechaVencimiento}
+        setFechaVencimiento={
+          setFechaVencimiento
+        }
+      />
+
+      <ProductosRemito
+        productos={productos}
+        lineas={lineas}
+        agregarLinea={agregarLinea}
+        quitarLinea={quitarLinea}
+        actualizarLinea={actualizarLinea}
+        actualizarProductoDeLinea={
+          actualizarProductoDeLinea
+        }
+      />
+
+
+      <PagoRemito
+        pagarAlCargar={pagarAlCargar}
+        setPagarAlCargar={
+          setPagarAlCargar
+        }
+        montoPagoMostrado={
+          montoPagoMostrado
+        }
+        setMontoPago={setMontoPago}
+        setPagoTocado={setPagoTocado}
+        total={total}
+        formasPago={formasPago}
+      />
 
       <button
         type="submit"
-        disabled={lineas.length === 0}
-        className="rounded bg-black px-5 py-2 text-white hover:opacity-80 disabled:opacity-40"
+        disabled={
+          lineas.length === 0
+        }
+        className="rounded-lg bg-black px-5 py-2 text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
       >
         Guardar remito
       </button>

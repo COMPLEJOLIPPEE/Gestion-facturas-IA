@@ -18,7 +18,6 @@ export default async function RemitoDetallePage({ params }: Props) {
       id,
       numero,
       fecha,
-      fecha_vencimiento,
       monto_total,
       estado,
       proveedores (nombre_fantasia),
@@ -59,61 +58,136 @@ export default async function RemitoDetallePage({ params }: Props) {
 
   return (
     <div>
-      <div className="mb-6">
-        <h1 className="text-3xl font-bold">📝 Remito {remito.numero ?? "s/n"}</h1>
-        <p className="mt-2 text-gray-600">{proveedor?.nombre_fantasia ?? "Sin proveedor"}</p>
-      </div>
+<div className="mb-6 flex items-start justify-between">
 
-      <div className="mb-6 grid gap-4 rounded-xl bg-white p-6 shadow md:grid-cols-4">
-        <div>
-          <p className="text-sm text-gray-500">Empresa</p>
-          <p className="font-medium">{empresa?.razon_social ?? "—"}</p>
-        </div>
-        <div>
-          <p className="text-sm text-gray-500">Fecha</p>
-          <p className="font-medium">{formatDateAR(remito.fecha)}</p>
-        </div>
-        <div>
-          <p className="text-sm text-gray-500">Vencimiento</p>
-          <p className="font-medium">
-            {formatDateAR(remito.fecha_vencimiento)}
-          </p>
-        </div>
-        <div>
-          <p className="text-sm text-gray-500">Estado</p>
-          <p className="font-medium">{remito.estado ?? "—"}</p>
-        </div>
-      </div>
+  <div>
 
-      <div className="overflow-hidden rounded-xl bg-white shadow">
-        <table className="w-full">
-          <thead className="bg-gray-100">
-            <tr>
-              <th className="p-3 text-left">Código</th>
-              <th className="p-3 text-left">Producto</th>
-              <th className="p-3 text-left">Unidad</th>
-              <th className="p-3 text-right">Cantidad</th>
-              <th className="p-3 text-right">Precio unitario</th>
-              <th className="p-3 text-right">Subtotal</th>
+    <h1 className="text-3xl font-bold">
+      📦 Comprobante de compra
+    </h1>
+
+    <p className="mt-2 text-lg font-medium">
+      {remito.numero ?? "Sin número"}
+    </p>
+
+    <p className="text-gray-600">
+      {proveedor?.nombre_fantasia ?? "Sin proveedor"}
+    </p>
+
+  </div>
+
+  <div className="rounded-lg bg-gray-100 px-4 py-2">
+
+    <p className="text-xs uppercase tracking-wide text-gray-500">
+      Estado
+    </p>
+
+    <p className="font-semibold">
+      {saldoPendiente === 0
+        ? "🟢 Pagado"
+        : totalPagado > 0
+        ? "🟡 Pago parcial"
+        : "⚪ Pendiente"}
+    </p>
+
+  </div>
+
+</div>
+
+        <div className="rounded-xl bg-white p-6 shadow">
+
+  <h2 className="mb-5 text-xl font-semibold">
+    📦 Productos
+  </h2>
+
+  <div className="overflow-x-auto">
+
+    <table className="w-full">
+
+      <thead>
+
+        <tr className="border-b text-left text-sm text-gray-500">
+
+          <th className="pb-3">Código</th>
+
+          <th className="pb-3">Producto</th>
+
+          <th className="pb-3">Unidad</th>
+
+          <th className="pb-3 text-right">
+            Cantidad
+          </th>
+
+          <th className="pb-3 text-right">
+            Precio Unit.
+          </th>
+
+          <th className="pb-3 text-right">
+            Subtotal
+          </th>
+
+        </tr>
+
+      </thead>
+
+      <tbody>
+
+        {itemsNormalizados.map((item) => {
+
+          const subtotal =
+            Number(item.cantidad) *
+            Number(item.precio_unitario);
+
+          return (
+
+            <tr
+              key={item.id}
+              className="border-b last:border-0"
+            >
+
+              <td className="py-3">
+                {item.productos?.codigo ?? "—"}
+              </td>
+
+              <td className="py-3 font-medium">
+                {item.productos?.nombre ?? "—"}
+              </td>
+
+              <td className="py-3">
+                {item.productos?.unidad_medida ?? "—"}
+              </td>
+
+              <td className="py-3 text-right">
+                {item.cantidad}
+              </td>
+
+              <td className="py-3 text-right">
+                $
+                {Number(
+                  item.precio_unitario
+                ).toLocaleString("es-AR")}
+              </td>
+
+              <td className="py-3 text-right font-medium">
+                $
+                {subtotal.toLocaleString(
+                  "es-AR"
+                )}
+              </td>
+
             </tr>
-          </thead>
-          <tbody>
-            {itemsNormalizados.map((item) => (
-              <tr key={item.id} className="border-t">
-                <td className="p-3">{item.productos?.codigo ?? "—"}</td>
-                <td className="p-3 font-medium">{item.productos?.nombre ?? "—"}</td>
-                <td className="p-3">{item.productos?.unidad_medida ?? "—"}</td>
-                <td className="p-3 text-right">{item.cantidad}</td>
-                <td className="p-3 text-right">
-                  ${Number(item.precio_unitario ?? 0).toLocaleString("es-AR")}
-                </td>
-                <td className="p-3 text-right">
-                  ${(Number(item.cantidad ?? 0) * Number(item.precio_unitario ?? 0)).toLocaleString("es-AR")}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+
+          );
+
+        })}
+
+      </tbody>
+
+    </table>
+
+  </div>
+
+</div>
 
         <div className="flex justify-end border-t p-4">
           <div className="w-64 text-sm">
@@ -123,46 +197,60 @@ export default async function RemitoDetallePage({ params }: Props) {
             </div>
           </div>
         </div>
-      </div>
 
-      <div className="mt-6 rounded-xl bg-white p-6 shadow">
-        <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold">Pagos</h2>
-          <p className="text-sm text-gray-500">
-            Pagado: ${totalPagado.toLocaleString("es-AR")} · Saldo: ${saldoPendiente.toLocaleString("es-AR")}
-          </p>
+      <div className="mb-6 grid gap-4 md:grid-cols-3">
+        <div className="rounded-lg bg-gray-50 p-4">
+          <p className="text-sm text-gray-500">Total del comprobante</p>
+          <p className="mt-1 text-xl font-bold">${Number(remito.monto_total ?? 0).toLocaleString("es-AR")}</p>
         </div>
 
-        {(pagos ?? []).length > 0 && (
-          <table className="mb-4 w-full text-sm">
-            <thead>
-              <tr className="text-left text-gray-500">
-                <th className="pb-2">Fecha</th>
-                <th className="pb-2">Forma de pago</th>
-                <th className="pb-2 text-right">Monto</th>
-              </tr>
-            </thead>
-            <tbody>
-              {(pagos ?? []).map((p) => {
-                const formaPago = Array.isArray(p.formas_pago) ? p.formas_pago[0] : p.formas_pago
-                return (
-                  <tr key={p.id} className="border-t">
-                    <td className="py-2">{formatDateAR(p.fecha)}</td>
-                    <td className="py-2">{formaPago?.nombre ?? "—"}</td>
-                    <td className="py-2 text-right">${Number(p.monto ?? 0).toLocaleString("es-AR")}</td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        )}
+        <div className="rounded-lg bg-green-50 p-4">
+          <p className="text-sm text-gray-500">Total pagado</p>
+          <p className="mt-1 text-xl font-bold text-green-700">${totalPagado.toLocaleString("es-AR")}</p>
+        </div>
 
-        {saldoPendiente > 0 ? (
-          <PagoInlineForm saldo={saldoPendiente} formasPago={formasPago ?? []} action={registrarPago} />
-        ) : (
-          <p className="text-sm text-green-600">✅ Remito totalmente pagado.</p>
-        )}
+        <div className="rounded-lg bg-amber-50 p-4">
+          <p className="text-sm text-gray-500">Saldo pendiente</p>
+          <p className="mt-1 text-xl font-bold text-amber-700">${saldoPendiente.toLocaleString("es-AR")}</p>
+        </div>
       </div>
+
+      <h2 className="mb-4 text-lg font-semibold">Historial de pagos</h2>
+
+      {(pagos ?? []).length > 0 && (
+        <table className="mb-4 w-full text-sm">
+          <thead>
+            <tr className="text-left text-gray-500">
+              <th className="pb-2">Fecha</th>
+              <th className="pb-2">Forma de pago</th>
+              <th className="pb-2 text-right">Monto</th>
+            </tr>
+          </thead>
+          <tbody>
+            {(pagos ?? []).map((p) => {
+              const formaPago = Array.isArray(p.formas_pago) ? p.formas_pago[0] : p.formas_pago
+              return (
+                <tr key={p.id} className="border-t">
+                  <td className="py-2">{formatDateAR(p.fecha)}</td>
+                  <td className="py-2">{formaPago?.nombre ?? "—"}</td>
+                  <td className="py-2 text-right">${Number(p.monto ?? 0).toLocaleString("es-AR")}</td>
+                </tr>
+              )
+            })}
+          </tbody>
+        </table>
+      )}
+
+      {saldoPendiente > 0 ? (
+        <PagoInlineForm saldo={saldoPendiente} formasPago={formasPago ?? []} action={registrarPago} />
+      ) : (
+        <p className="text-sm text-green-600">✅ Remito totalmente pagado.</p>
+      )}
     </div>
   )
 }
+{/* Próximamente:
+    Documento original
+    Observaciones
+    IA
+*/}

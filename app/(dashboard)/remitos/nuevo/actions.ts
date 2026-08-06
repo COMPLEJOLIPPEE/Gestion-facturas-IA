@@ -21,19 +21,30 @@ export async function crearRemito(formData: FormData) {
     throw new Error("El remito necesita al menos una línea de producto")
   }
 
-  const montoTotal = Number(formData.get("monto_total"))
-
+const total = items.reduce(
+  (acumulado, item) =>
+    acumulado +
+    item.cantidad * item.precio_unitario,
+  0
+)
   const { data: remito, error: errorRemito } = await supabase
     .from("remitos")
-    .insert({
-      numero: (formData.get("numero") as string) || null,
-      fecha: formData.get("fecha") as string,
-      fecha_vencimiento: (formData.get("fecha_vencimiento") as string) || null,
-      proveedor_id: formData.get("proveedor_id") as string,
-      empresa_id: formData.get("empresa_id") as string,
-      monto_total: montoTotal,
-      estado: "pendiente",
-    })
+.insert({
+  numero:
+    (formData.get("numero") as string) ||
+    null,
+
+  fecha:
+    formData.get("fecha") as string,
+
+  proveedor_id:
+    formData.get("proveedor_id") as string,
+
+  empresa_id:
+    formData.get("empresa_id") as string,
+
+  monto_total: total,
+})
     .select("id")
     .single()
 

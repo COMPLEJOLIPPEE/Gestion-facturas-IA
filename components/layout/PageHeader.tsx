@@ -4,6 +4,7 @@ import { cn } from "@/lib/utils";
 interface PageHeaderProps {
   title: string;
   description?: string;
+  icon?: React.ReactNode;
   actions?: React.ReactNode;
   className?: string;
 }
@@ -16,11 +17,13 @@ interface PageHeaderProps {
  * Contiene:
  * - Título
  * - Descripción
+ * - Icono
  * - Acciones (botones)
  */
 export default function PageHeader({
   title,
   description,
+  icon,
   actions,
   className,
 }: PageHeaderProps) {
@@ -32,6 +35,8 @@ export default function PageHeader({
       )}
     >
       <div className="space-y-1">
+        {icon && <div className="text-black">{icon}</div>}
+
         <h1 className="text-3xl font-bold tracking-tight">
           {title}
         </h1>

@@ -1,19 +1,42 @@
-import { createClient } from "@/lib/supabase/server"
-import { RemitoForm } from "./RemitoForm"
+import { createClient } from "@/lib/supabase/server";
+import { RemitoForm } from "./RemitoForm";
 
 export default async function NuevoRemitoPage() {
-  const supabase = await createClient()
+  const supabase = await createClient();
 
-  const [{ data: proveedores }, { data: empresas }, { data: productos }, { data: formasPago }] = await Promise.all([
-    supabase.from("proveedores").select("id, nombre_fantasia").order("nombre_fantasia"),
-    supabase.from("empresas").select("id, razon_social").order("razon_social"),
-    supabase.from("productos").select("id, nombre, codigo").order("nombre"),
-    supabase.from("formas_pago").select("id, nombre").order("nombre"),
-  ])
+  const [
+    { data: proveedores },
+    { data: empresas },
+    { data: productos },
+    { data: formasPago },
+  ] = await Promise.all([
+    supabase
+      .from("proveedores")
+      .select("id, nombre_fantasia")
+      .order("nombre_fantasia"),
+
+    supabase
+      .from("empresas")
+      .select("id, razon_social")
+      .order("razon_social"),
+
+    supabase
+      .from("productos")
+      .select("id, nombre, codigo")
+      .order("nombre"),
+
+    supabase
+      .from("formas_pago")
+      .select("id, nombre")
+      .order("nombre"),
+  ]);
 
   return (
     <div>
-      <h1 className="mb-6 text-3xl font-bold">📝 Nuevo remito</h1>
+      <h1 className="mb-6 text-3xl font-bold">
+        📦 Nuevo remito
+      </h1>
+
       <RemitoForm
         proveedores={proveedores ?? []}
         empresas={empresas ?? []}
@@ -21,5 +44,5 @@ export default async function NuevoRemitoPage() {
         formasPago={formasPago ?? []}
       />
     </div>
-  )
+  );
 }

@@ -56,7 +56,7 @@ export default async function ProductosPage() {
         actions={
           <Link href="/productos/nuevo">
             <Button>
-              <Plus className="h-4 w-4" />
+              <Plus className="h-4 w-4 mr-2" />
               Nuevo producto
             </Button>
           </Link>
