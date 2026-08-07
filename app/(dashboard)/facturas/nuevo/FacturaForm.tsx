@@ -14,7 +14,6 @@ import PagoFactura from "./components/PagoFactura"
 
 import { leerFacturaConIA } from "@/lib/ai/actions"
 
-import { procesarLineasIA } from "@/lib/ai/matching/ProcesaarLineasIA";
 
 type Proveedor = {
   id: string
@@ -80,12 +79,16 @@ export function FacturaForm({
   const agregarLinea = () => {
     setLineas((prev) => [
       ...prev,
-      {
-        producto_id: "",
-        cantidad: 1,
-        precio_unitario: 0,
-        iva: 21,
-      },
+{
+  producto_id: "",
+  cantidad: 1,
+  precio_unitario: 0,
+  iva: 21,
+
+  descuento: 0,
+
+  precio_final: 0,
+}
     ])
   }
 
@@ -220,21 +223,47 @@ export function FacturaForm({
 
       if (datos.lineas.length > 0) {
 
-        setLineas(
+setLineas(
 
-          datos.lineas.map((l) => ({
-            producto_id: "",
-            cantidad: l.cantidad || 1,
-            precio_unitario: l.precio_unitario || 0,
-            iva: l.iva ?? 21,
-            descripcionLeida: l.descripcion,
-            autoMatcheado: false,
-          }))
+  datos.lineas.map((l) => {
 
-        )
+    const cantidad = l.cantidad || 1
 
+    const precio = l.precio_unitario || 0
+
+    const porcentajeIVA = l.iva ?? 21
+
+    const subtotal = cantidad * precio
+
+    const importeIVA =
+      subtotal * (porcentajeIVA / 100)
+
+    return {
+
+      producto_id: "",
+
+      cantidad,
+
+      precio_unitario: precio,
+
+      iva: porcentajeIVA,
+
+      descuento: 0,
+
+      precio_final:
+        subtotal + importeIVA,
+
+      descripcionLeida:
+        l.descripcion,
+
+      autoMatcheado: false,
+
+    }
+
+  })
+
+)
       }
-
     } catch (error) {
 
       setErrorIA(

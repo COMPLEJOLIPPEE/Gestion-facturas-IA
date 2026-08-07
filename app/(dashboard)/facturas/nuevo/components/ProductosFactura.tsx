@@ -13,6 +13,8 @@ export type LineaFactura = {
   cantidad: number;
   precio_unitario: number;
   iva: number;
+  descuento: number;
+  precio_final: number;
   codigo_proveedor?: string;
   descripcion_proveedor?: string;
   descripcionLeida?: string;
@@ -20,10 +22,8 @@ export type LineaFactura = {
   score?: number;
   confianza?: "alta" | "media" | "baja";
   motivo?: string;
- fuente?:
-  | "alias"
-  | "smartmatch"
-  | "manual";
+  aprendido?: boolean;
+  fuente?: "alias" | "smartmatch" | "manual";
 };
 
 type Props = {

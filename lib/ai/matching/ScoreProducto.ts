@@ -1,4 +1,4 @@
-import { normalizarTexto } from "./NormalizarTexto";
+import { normalizarTexto } from "./normalizarTexto";
 
 export type ResultadoScore = {
   score: number;

@@ -44,7 +44,7 @@ const reemplazos: Record<string, string> = {
   "/": " ",
 };
 
-export function normalizarTexto(texto: string): string {
+export function normalizartexto(texto: string): string {
 
   let resultado = texto.toLowerCase();
 
@@ -61,5 +61,22 @@ export function normalizarTexto(texto: string): string {
   resultado = resultado.trim();
 
   return resultado;
+
+}
+export function normalizarTexto(texto: string): string {
+
+  return texto
+
+    .normalize("NFD")
+
+    .replace(/[\u0300-\u036f]/g, "")
+
+    .toLowerCase()
+
+    .replace(/[^a-z0-9\s]/g, " ")
+
+    .replace(/\s+/g, " ")
+
+    .trim()
 
 }

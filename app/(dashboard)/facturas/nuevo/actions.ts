@@ -7,9 +7,16 @@ import { redirect } from "next/navigation"
 
 type ItemInput = {
   producto_id: string
+
   cantidad: number
+
   precio_unitario: number
+
   iva: number
+
+  descuento: number
+
+  precio_final: number
 }
 
 export async function crearFactura(formData: FormData) {
@@ -53,7 +60,9 @@ export async function crearFactura(formData: FormData) {
       cantidad: item.cantidad,
       precio_unitario: item.precio_unitario,
       iva: item.iva,
-    }))
+      descuento: item.descuento,
+      precio_final: item.precio_final,
+  }))
   )
 
   if (errorItems) {
@@ -69,10 +78,15 @@ export async function crearFactura(formData: FormData) {
 
     await supabase
       .from("productos")
-      .update({
-        ultimo_costo: productoActual?.costo_actual ?? null,
-        costo_actual: item.precio_unitario,
-      })
+.update({
+
+  ultimo_costo:
+    productoActual?.costo_actual ?? null,
+
+  costo_actual:
+    item.precio_final,
+
+})
       .eq("id", item.producto_id)
   }
 

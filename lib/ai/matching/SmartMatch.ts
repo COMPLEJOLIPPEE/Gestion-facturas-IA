@@ -1,5 +1,5 @@
 import { parseProducto } from "./parseProducto";
-import { scoreProducto } from "./ScoreProducto";
+import { scoreProducto } from "./scoreProducto";
 
 export type ProductoBD = {
   id: string;

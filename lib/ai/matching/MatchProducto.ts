@@ -1,4 +1,4 @@
-import { scoreProducto } from "./ScoreProducto";
+import { scoreProducto } from "./scoreProducto";
 
 export type ProductoMatch = {
   id: string;

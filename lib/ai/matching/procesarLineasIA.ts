@@ -1,16 +1,10 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 
-import { buscarAlias } from "./BuscarAlias";
+import type { LineaExtraida } from "../tipos";
+import { buscarAlias } from "./buscarAlias";
 import { smartMatch } from "./smartMatch";
 
-export type LineaIA = {
-  descripcion: string;
-  cantidad: number;
-  precio_unitario: number;
-  iva?: number;
-
-  codigo_proveedor?: string;
-};
+export type LineaIA = LineaExtraida;
 
 export type ProductoSistema = {
   id: string;
@@ -26,6 +20,10 @@ export type LineaProcesada = {
 
   iva: number;
 
+  descuento: number;
+
+  precio_final: number;
+
   descripcionLeida: string;
 
   codigo_proveedor?: string;
@@ -37,6 +35,8 @@ export type LineaProcesada = {
   confianza: "alta" | "media" | "baja";
 
   motivo: string;
+
+  fuente: "alias" | "smartmatch" | "manual";
 };
 
 export async function procesarLineasIA(
@@ -49,6 +49,10 @@ export async function procesarLineasIA(
   const resultado: LineaProcesada[] = [];
 
   for (const linea of lineasIA) {
+
+    const descuento = linea.descuento ?? 0;
+    const precio_final =
+      linea.precio_final ?? linea.precio_unitario * linea.cantidad;
 
     // ------------------------------------------------
     // 1) Buscar alias
@@ -64,7 +68,6 @@ export async function procesarLineasIA(
     if (alias) {
 
       resultado.push({
-
         producto_id: alias.producto_id,
 
         cantidad: linea.cantidad,
@@ -73,11 +76,14 @@ export async function procesarLineasIA(
 
         iva: linea.iva ?? 21,
 
+        descuento,
+
+        precio_final,
+
         descripcionLeida: linea.descripcion,
 
         codigo_proveedor:
-          linea.codigo_proveedor,
-
+          linea.codigo_proveedor ?? undefined,
         autoMatcheado: true,
 
         score: 100,
@@ -86,6 +92,8 @@ export async function procesarLineasIA(
 
         motivo:
           "Producto reconocido mediante historial del proveedor.",
+
+        fuente: "alias",
 
       });
 
@@ -103,37 +111,19 @@ export async function procesarLineasIA(
     );
 
     resultado.push({
-
-      producto_id:
-        match.producto?.id ?? "",
-
-      cantidad:
-        linea.cantidad,
-
-      precio_unitario:
-        linea.precio_unitario,
-
-      iva:
-        linea.iva ?? 21,
-
-      descripcionLeida:
-        linea.descripcion,
-
-      codigo_proveedor:
-        linea.codigo_proveedor,
-
-      autoMatcheado:
-        match.confianza === "alta",
-
-      score:
-        match.score,
-
-      confianza:
-        match.confianza,
-
-      motivo:
-        match.motivo,
-
+      producto_id: match.producto?.id ?? "",
+      cantidad: linea.cantidad,
+      precio_unitario: linea.precio_unitario,
+      iva: linea.iva ?? 21,
+      descuento,
+      precio_final,
+      descripcionLeida: linea.descripcion,
+      codigo_proveedor: linea.codigo_proveedor ?? undefined,
+      autoMatcheado: match.confianza === "alta",
+      score: match.score,
+      confianza: match.confianza,
+      motivo: match.motivo,
+      fuente: "smartmatch",
     });
 
   }

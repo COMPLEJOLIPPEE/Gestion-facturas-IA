@@ -1,5 +1,5 @@
 import { SupabaseClient } from "@supabase/supabase-js";
-import { normalizarTexto } from "./NormalizarTexto";
+import { normalizarTexto } from "./normalizarTexto";
 
 export async function guardarAlias(
   supabase: SupabaseClient,
