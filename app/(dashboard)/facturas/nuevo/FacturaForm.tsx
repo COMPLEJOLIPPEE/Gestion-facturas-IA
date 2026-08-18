@@ -1,8 +1,10 @@
 'use client'
 
 import { useMemo, useRef, useState } from "react"
-
-import { crearFactura } from "./actions"
+import {
+  crearFactura,
+  crearProductoDesdeFactura,
+} from "./actions"
 
 import CargaIA from "./components/CargaIA"
 import DatosComprobante from "./components/DatosComprobante"
@@ -12,7 +14,10 @@ import ProductosFactura, {
 import ImpuestosFactura from "./components/ImpuestosFactura"
 import PagoFactura from "./components/PagoFactura"
 
-import { leerFacturaConIA } from "@/lib/ai/actions"
+import {
+  leerFacturaConIA,
+  procesarLineasFacturaConIA,
+} from "@/lib/ai/actions"
 
 
 type Proveedor = {
@@ -51,6 +56,11 @@ export function FacturaForm({
 }: Props) {
 
   const [lineas, setLineas] = useState<LineaFactura[]>([])
+  const [productosDisponibles, setProductosDisponibles] =
+  useState<Producto[]>(productos)
+  const [cargos, setCargos] = useState<
+  { descripcion: string; importe: number }[]
+>([])
 
   const [proveedorId, setProveedorId] = useState("")
   const [numero, setNumero] = useState("")
@@ -130,42 +140,207 @@ export function FacturaForm({
       )
     )
   }
+const crearProductoDesdeLinea = async (
+  index: number,
+  nombre: string,
+  costo: number,
+  iva: number
+) => {
+  const formData = new FormData()
 
-  const {
-    subtotal,
-    iva,
-    total,
-  } = useMemo(() => {
+  formData.set("nombre", nombre)
+  formData.set("costo", String(costo))
+  formData.set("iva", String(iva))
 
-    let subtotal = 0
-    let ivaTotal = 0
+  const resultado =
+    await crearProductoDesdeFactura(formData)
 
-    lineas.forEach((linea) => {
+  if (!resultado.ok) {
+    alert(resultado.error)
 
-      const importe =
-        linea.cantidad *
-        linea.precio_unitario
+    // Si ya existía, lo agregamos igualmente
+    // a la lista y lo seleccionamos.
+    if (resultado.producto) {
+      setProductosDisponibles((prev) => {
+        if (
+          prev.some(
+            (producto) =>
+              producto.id === resultado.producto!.id
+          )
+        ) {
+          return prev
+        }
 
-      subtotal += importe
+        return [
+          ...prev,
+          resultado.producto!,
+        ]
+      })
 
-      ivaTotal +=
-        importe *
-        (linea.iva / 100)
-
-    })
-
-    return {
-      subtotal,
-      iva: ivaTotal,
-      total: subtotal + ivaTotal,
+      actualizarProductoDeLinea(
+        index,
+        resultado.producto.id
+      )
     }
 
-  }, [lineas])
+    return
+  }
 
-  const montoPagoMostrado =
-    pagoTocado
-      ? montoPago
-      : total
+  if (resultado.producto) {
+    setProductosDisponibles((prev) => [
+      ...prev,
+      resultado.producto!,
+    ])
+
+    actualizarProductoDeLinea(
+      index,
+      resultado.producto.id
+    )
+  }
+}
+const {
+  subtotal,
+  descuentos,
+  iva,
+  total,
+} = useMemo(() => {
+
+  let subtotalBruto = 0
+  let descuentosTotal = 0
+
+  // -----------------------------------------
+  // 1. Neto bruto de productos
+  // -----------------------------------------
+
+  lineas.forEach((linea) => {
+
+    const bruto =
+      Number(linea.cantidad ?? 0) *
+      Number(linea.precio_unitario ?? 0)
+
+    subtotalBruto += bruto
+
+    descuentosTotal +=
+      Math.abs(Number(linea.descuento ?? 0))
+  })
+
+  // -----------------------------------------
+  // 2. Neto después de descuentos
+  // -----------------------------------------
+
+  const subtotalNeto =
+    Math.max(
+      0,
+      subtotalBruto - descuentosTotal
+    )
+
+  // -----------------------------------------
+  // 3. IVA
+  //
+  // Si los descuentos están cargados
+  // directamente en las líneas, se respetan.
+  //
+  // Si el descuento es global/por segmento,
+  // se distribuye proporcionalmente entre
+  // las líneas según su valor bruto.
+  // -----------------------------------------
+
+  let ivaTotal = 0
+
+  lineas.forEach((linea) => {
+
+    const bruto =
+      Number(linea.cantidad ?? 0) *
+      Number(linea.precio_unitario ?? 0)
+
+    if (bruto <= 0) return
+
+    const descuentoLinea =
+      Math.abs(Number(linea.descuento ?? 0))
+
+    let descuentoAplicado =
+      descuentoLinea
+
+    // Si la línea no tiene descuento propio,
+    // distribuimos proporcionalmente el descuento
+    // global/por segmento.
+    if (
+      descuentoAplicado === 0 &&
+      subtotalBruto > 0 &&
+      descuentosTotal > 0
+    ) {
+      descuentoAplicado =
+        descuentosTotal *
+        (bruto / subtotalBruto)
+    }
+
+    const netoLinea =
+      Math.max(
+        0,
+        bruto - descuentoAplicado
+      )
+
+    const ivaLinea =
+      Number(linea.iva ?? 0)
+
+    const tasaIVA =
+      ivaLinea === 21 ||
+      ivaLinea === 10.5 ||
+      ivaLinea === 0
+        ? ivaLinea
+        : ivaLinea > 100
+          ? ivaLinea / 100
+          : 0
+
+    ivaTotal +=
+      netoLinea *
+      (tasaIVA / 100)
+  })
+
+  // -----------------------------------------
+  // 4. Otros cargos / percepciones
+  // -----------------------------------------
+
+  const totalCargos =
+    cargos.reduce(
+      (acumulado, cargo) =>
+        acumulado +
+        Math.abs(
+          Number(cargo.importe ?? 0)
+        ),
+      0
+    )
+
+  // -----------------------------------------
+  // 5. Total final
+  // -----------------------------------------
+
+  const totalCalculado =
+    subtotalNeto +
+    ivaTotal +
+    totalCargos
+
+  return {
+    // Mostramos el neto después de descuentos
+    subtotal: subtotalNeto,
+
+    descuentos: descuentosTotal,
+
+    iva: Number(
+      ivaTotal.toFixed(2)
+    ),
+
+    total: Number(
+      totalCalculado.toFixed(2)
+    ),
+  }
+
+}, [lineas, cargos])
+
+const montoPagoMostrado =
+  pagoTocado
+    ? Number(montoPago.toFixed(2))
+    : total
 
   const archivoABase64 = (
     file: File
@@ -192,97 +367,162 @@ export function FacturaForm({
 
     })
 
-  async function manejarArchivoIA(
-    file: File
-  ) {
+async function manejarArchivoIA(
+  file: File
+) {
 
-    setLeyendoIA(true)
-    setErrorIA(null)
+  setLeyendoIA(true)
+  setErrorIA(null)
 
-    try {
+  try {
 
-      const base64 =
-        await archivoABase64(file)
+    const base64 =
+      await archivoABase64(file)
 
-      const datos =
-        await leerFacturaConIA(
-          base64,
-          file.type
+    const datos =
+      await leerFacturaConIA(
+        base64,
+        file.type
+      )
+setCargos(
+  (datos.cargos ?? []).map((cargo) => ({
+    descripcion: cargo.descripcion,
+    importe: Math.abs(Number(cargo.importe ?? 0)),
+  }))
+)
+    // -----------------------------------------
+    // Datos generales de la factura
+    // -----------------------------------------
+
+    if (datos.numero)
+      setNumero(datos.numero)
+
+    if (datos.fecha)
+      setFecha(datos.fecha)
+
+    if (datos.fecha_vencimiento)
+      setFechaVencimiento(
+        datos.fecha_vencimiento
+      )
+
+    // -----------------------------------------
+    // Buscar proveedor detectado por IA
+    // -----------------------------------------
+
+    let proveedorDetectadoId =
+      proveedorId
+
+    if (datos.proveedor_nombre) {
+
+      const nombreIA =
+        datos.proveedor_nombre
+          .toLowerCase()
+          .trim()
+
+      const proveedorEncontrado =
+        proveedores.find((proveedor) =>
+          proveedor.nombre_fantasia
+            .toLowerCase()
+            .trim()
+            .includes(nombreIA)
+          ||
+          nombreIA.includes(
+            proveedor.nombre_fantasia
+              .toLowerCase()
+              .trim()
+          )
         )
 
-      if (datos.numero)
-        setNumero(datos.numero)
+      if (proveedorEncontrado) {
 
-      if (datos.fecha)
-        setFecha(datos.fecha)
+        proveedorDetectadoId =
+          proveedorEncontrado.id
 
-      if (datos.fecha_vencimiento)
-        setFechaVencimiento(
-          datos.fecha_vencimiento
+        setProveedorId(
+          proveedorEncontrado.id
         )
 
-      if (datos.lineas.length > 0) {
+      }
+    }
+
+    // -----------------------------------------
+    // Procesar productos con IA
+    // -----------------------------------------
+
+    if (
+      datos.lineas.length > 0 &&
+      proveedorDetectadoId
+    ) {
+
+      const lineasProcesadas =
+        await procesarLineasFacturaConIA(
+          proveedorDetectadoId,
+          datos.lineas,
+          productos.map((producto) => ({
+            id: producto.id,
+            nombre: producto.nombre,
+          }))
+        )
+
+      setLineas(
+        lineasProcesadas
+      )
+
+    } else {
+
+      // Si no encontramos proveedor,
+      // mostramos igualmente las líneas
+      // pero sin matching automático.
 
 setLineas(
+  datos.lineas.map((l) => ({
+    producto_id: "",
+    cantidad: l.cantidad || 1,
+    precio_unitario: l.precio_unitario || 0,
+    iva: l.iva ?? 21,
 
-  datos.lineas.map((l) => {
+    descuento: l.descuento ?? 0,
 
-    const cantidad = l.cantidad || 1
+    precio_final:
+      l.precio_final ??
+      Math.max(
+        0,
+        (l.cantidad || 1) *
+          (l.precio_unitario || 0) -
+          (l.descuento ?? 0)
+      ),
 
-    const precio = l.precio_unitario || 0
+    codigo_proveedor:
+      l.codigo_proveedor ?? undefined,
 
-    const porcentajeIVA = l.iva ?? 21
+    descripcionLeida:
+      l.descripcion,
 
-    const subtotal = cantidad * precio
-
-    const importeIVA =
-      subtotal * (porcentajeIVA / 100)
-
-    return {
-
-      producto_id: "",
-
-      cantidad,
-
-      precio_unitario: precio,
-
-      iva: porcentajeIVA,
-
-      descuento: 0,
-
-      precio_final:
-        subtotal + importeIVA,
-
-      descripcionLeida:
-        l.descripcion,
-
-      autoMatcheado: false,
+    autoMatcheado:
+      false,
+  }))
+)
 
     }
 
-  })
+  } catch (error) {
 
-)
-      }
-    } catch (error) {
+    setErrorIA(
+      error instanceof Error
+        ? error.message
+        : "No se pudo leer la factura."
+    )
 
-      setErrorIA(
-        error instanceof Error
-          ? error.message
-          : "No se pudo leer la factura."
-      )
+  } finally {
 
-    } finally {
+    setLeyendoIA(false)
 
-      setLeyendoIA(false)
-
-      if (inputArchivoRef.current) {
-        inputArchivoRef.current.value = ""
-      }
-
+    if (inputArchivoRef.current) {
+      inputArchivoRef.current.value = ""
     }
 
   }
+}
     return (
     <form
       action={crearFactura}
@@ -334,20 +574,25 @@ setLineas(
         }
       />
 
-      <ProductosFactura
-        productos={productos}
-        lineas={lineas}
-        agregarLinea={agregarLinea}
-        quitarLinea={quitarLinea}
-        actualizarLinea={actualizarLinea}
-        actualizarProductoDeLinea={
-          actualizarProductoDeLinea
-        }
-      />
+<ProductosFactura
+  productos={productosDisponibles}
+  lineas={lineas}
+  agregarLinea={agregarLinea}
+  quitarLinea={quitarLinea}
+  actualizarLinea={actualizarLinea}
+  actualizarProductoDeLinea={
+    actualizarProductoDeLinea
+  }
+  crearProductoDesdeLinea={
+    crearProductoDesdeLinea
+  }
+/>
 
-      <ImpuestosFactura
+        <ImpuestosFactura
         subtotal={subtotal}
+        descuentos={descuentos}
         iva={iva}
+        cargos={cargos}
         total={total}
       />
 

@@ -40,6 +40,12 @@ type Props = {
     index: number,
     productoId: string
   ) => void;
+  crearProductoDesdeLinea: (
+    index: number,
+    nombre: string,
+    costo: number,
+    iva: number
+  ) => Promise<void>;
 };
 
 export default function ProductosFactura({
@@ -49,6 +55,7 @@ export default function ProductosFactura({
   quitarLinea,
   actualizarLinea,
   actualizarProductoDeLinea,
+  crearProductoDesdeLinea,
 }: Props) {
   return (
     <div className="rounded-xl bg-white p-6 shadow">
@@ -87,7 +94,14 @@ export default function ProductosFactura({
           </div>
 
           {lineas.map((linea, index) => {
-            const subtotal = linea.cantidad * linea.precio_unitario;
+const bruto =
+  linea.cantidad * linea.precio_unitario;
+
+const descuento =
+  linea.descuento ?? 0;
+
+const subtotal =
+  Math.max(0, bruto - descuento);
             return (
               <div key={index} className="mb-4 grid grid-cols-12 items-start gap-3">
                 <div className="col-span-4">
@@ -104,6 +118,23 @@ export default function ProductosFactura({
                       </option>
                     ))}
                   </select>
+{!linea.producto_id &&
+  linea.descripcionLeida && (
+    <button
+      type="button"
+      onClick={() =>
+        crearProductoDesdeLinea(
+          index,
+          linea.descripcionLeida ?? "",
+          Number(linea.precio_unitario ?? 0),
+          Number(linea.iva ?? 21)
+        )
+      }
+      className="mt-2 w-full rounded-md bg-green-600 px-3 py-2 text-xs font-semibold text-white hover:bg-green-700"
+    >
+      + Crear este producto
+    </button>
+  )}
 
                   {linea.confianza === "alta" && (
                     <div className="mt-2 rounded-md bg-green-50 p-2">

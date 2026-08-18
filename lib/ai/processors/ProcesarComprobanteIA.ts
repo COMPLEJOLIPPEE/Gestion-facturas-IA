@@ -1,8 +1,8 @@
 import { SupabaseClient } from "@supabase/supabase-js";
 
 import type { ComprobanteExtraido } from "../tipos";
-import type { LineaProcesada } from "../matching/ProcesarLineasIA";
-import { procesarLineasIA } from "../matching/ProcesarLineasIA";
+import type { LineaProcesada } from "../matching/procesarLineasIA";
+import { procesarLineasIA } from "../matching/procesarLineasIA";
 
 type ProductoSistema = {
   id: string;

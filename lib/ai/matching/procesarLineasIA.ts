@@ -50,12 +50,19 @@ export async function procesarLineasIA(
 
   for (const linea of lineasIA) {
 
+    const iva = linea.iva ?? 21;
+
     const descuento = linea.descuento ?? 0;
-    const precio_final =
-      linea.precio_final ?? linea.precio_unitario * linea.cantidad;
+
+    const subtotal =
+      linea.cantidad * linea.precio_unitario;
+
+    const precioFinal =
+      linea.precio_final ??
+      (subtotal - descuento);
 
     // ------------------------------------------------
-    // 1) Buscar alias
+    // 1) Buscar alias del proveedor
     // ------------------------------------------------
 
     const alias = await buscarAlias(
@@ -68,22 +75,29 @@ export async function procesarLineasIA(
     if (alias) {
 
       resultado.push({
-        producto_id: alias.producto_id,
 
-        cantidad: linea.cantidad,
+        producto_id:
+          alias.producto_id,
 
-        precio_unitario: linea.precio_unitario,
+        cantidad:
+          linea.cantidad,
 
-        iva: linea.iva ?? 21,
+        precio_unitario:
+          linea.precio_unitario,
+
+        iva,
 
         descuento,
 
-        precio_final,
+        precio_final:
+          precioFinal,
 
-        descripcionLeida: linea.descripcion,
+        descripcionLeida:
+          linea.descripcion,
 
         codigo_proveedor:
           linea.codigo_proveedor ?? undefined,
+
         autoMatcheado: true,
 
         score: 100,
@@ -98,11 +112,10 @@ export async function procesarLineasIA(
       });
 
       continue;
-
     }
 
     // ------------------------------------------------
-    // 2) Smart Match
+    // 2) SmartMatch
     // ------------------------------------------------
 
     const match = smartMatch(
@@ -111,23 +124,46 @@ export async function procesarLineasIA(
     );
 
     resultado.push({
-      producto_id: match.producto?.id ?? "",
-      cantidad: linea.cantidad,
-      precio_unitario: linea.precio_unitario,
-      iva: linea.iva ?? 21,
-      descuento,
-      precio_final,
-      descripcionLeida: linea.descripcion,
-      codigo_proveedor: linea.codigo_proveedor ?? undefined,
-      autoMatcheado: match.confianza === "alta",
-      score: match.score,
-      confianza: match.confianza,
-      motivo: match.motivo,
-      fuente: "smartmatch",
-    });
 
+      producto_id:
+        match.producto?.id ?? "",
+
+      cantidad:
+        linea.cantidad,
+
+      precio_unitario:
+        linea.precio_unitario,
+
+      iva,
+
+      descuento,
+
+      precio_final:
+        precioFinal,
+
+      descripcionLeida:
+        linea.descripcion,
+
+      codigo_proveedor:
+        linea.codigo_proveedor ?? undefined,
+
+      autoMatcheado:
+        match.confianza === "alta",
+
+      score:
+        match.score,
+
+      confianza:
+        match.confianza,
+
+      motivo:
+        match.motivo,
+
+      fuente:
+        "smartmatch",
+
+    });
   }
 
   return resultado;
-
 }

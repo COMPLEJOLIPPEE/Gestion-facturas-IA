@@ -21,29 +21,24 @@ export function smartMatch(
   const productoIA = parseProducto(descripcionIA);
 
   let mejorProducto: ProductoBD | null = null;
-  let mejorScore = -1;
-  let motivo = "";
+  let mejorScore = 0;
 
   for (const producto of productos) {
 
-    const productoBD = parseProducto(
-      producto.nombre
-    );
+    const productoBD = parseProducto(producto.nombre);
 
     let score = 0;
 
-    // Marca (40 puntos)
-
+    // Marca: 30 puntos
     if (
       productoIA.marca &&
       productoBD.marca &&
       productoIA.marca === productoBD.marca
     ) {
-      score += 40;
+      score += 30;
     }
 
-    // Volumen (25 puntos)
-
+    // Volumen: 25 puntos
     if (
       productoIA.volumen &&
       productoBD.volumen &&
@@ -52,8 +47,7 @@ export function smartMatch(
       score += 25;
     }
 
-    // Unidad (10 puntos)
-
+    // Unidad: 10 puntos
     if (
       productoIA.unidad &&
       productoBD.unidad &&
@@ -62,8 +56,7 @@ export function smartMatch(
       score += 10;
     }
 
-    // Envase (10 puntos)
-
+    // Envase: 10 puntos
     if (
       productoIA.envase &&
       productoBD.envase &&
@@ -72,8 +65,7 @@ export function smartMatch(
       score += 10;
     }
 
-    // Pack (5 puntos)
-
+    // Pack: 5 puntos
     if (
       productoIA.pack &&
       productoBD.pack &&
@@ -82,8 +74,7 @@ export function smartMatch(
       score += 5;
     }
 
-    // Texto (20 puntos)
-
+    // Descripción: 20 puntos
     const similitud = scoreProducto(
       descripcionIA,
       producto.nombre
@@ -92,46 +83,45 @@ export function smartMatch(
     score += similitud.score * 0.2;
 
     if (score > mejorScore) {
-
       mejorScore = score;
       mejorProducto = producto;
-
     }
-
   }
 
-  let confianza: SmartMatch["confianza"];
+  const scoreFinal = Math.round(mejorScore);
 
-  if (mejorScore >= 90) {
+  let confianza: SmartMatch["confianza"];
+  let motivo: string;
+
+  if (scoreFinal >= 90) {
 
     confianza = "alta";
-    motivo =
-      "Coincidencia por marca, presentación y descripción.";
 
-  } else if (mejorScore >= 70) {
+    motivo =
+      "Coincidencia alta por marca, presentación y descripción.";
+
+  } else if (scoreFinal >= 70) {
 
     confianza = "media";
+
     motivo =
-      "Coincidencia parcial. Conviene revisar.";
+      "Coincidencia parcial. Conviene revisar el producto.";
 
   } else {
 
     confianza = "baja";
+
     motivo =
       "No se encontró una coincidencia confiable.";
 
+    // No asignamos automáticamente un producto
+    mejorProducto = null;
   }
 
   return {
-
     producto: mejorProducto,
-
-    score: Math.round(mejorScore),
-
+    score: scoreFinal,
     confianza,
-
     motivo,
-
   };
-
 }

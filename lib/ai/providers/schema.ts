@@ -24,6 +24,49 @@ export const schema = {
       nullable: true,
     },
 
+    subtotal_bruto: {
+      type: Type.NUMBER,
+      nullable: true,
+    },
+
+    descuento_total: {
+      type: Type.NUMBER,
+      nullable: true,
+    },
+
+    subtotal_neto: {
+      type: Type.NUMBER,
+      nullable: true,
+    },
+
+    iva_total: {
+      type: Type.NUMBER,
+      nullable: true,
+    },
+
+    cargos: {
+      type: Type.ARRAY,
+
+      items: {
+        type: Type.OBJECT,
+
+        properties: {
+          descripcion: {
+            type: Type.STRING,
+          },
+
+          importe: {
+            type: Type.NUMBER,
+          },
+        },
+
+        required: [
+          "descripcion",
+          "importe",
+        ],
+      },
+    },
+
     total: {
       type: Type.NUMBER,
       nullable: true,
