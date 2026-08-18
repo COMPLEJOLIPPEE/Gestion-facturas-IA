@@ -1,11 +1,9 @@
 import { SupabaseClient } from "@supabase/supabase-js";
-
 import type { LineaExtraida } from "../tipos";
 import { buscarAlias } from "./buscarAlias";
 import { smartMatch } from "./smartMatch";
 
 export type LineaIA = LineaExtraida;
-
 export type ProductoSistema = {
   id: string;
   nombre: string;
