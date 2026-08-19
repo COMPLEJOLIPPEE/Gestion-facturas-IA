@@ -10,6 +10,7 @@ export type LineaRemito = {
   producto_id: string;
   cantidad: number;
   precio_unitario: number;
+  iva: number;
 
   codigo_proveedor?: string;
   descripcion_proveedor?: string;

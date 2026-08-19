@@ -17,6 +17,7 @@ import PagoFactura from "./components/PagoFactura"
 import {
   leerFacturaConIA,
   procesarLineasFacturaConIA,
+  usarOCRParaFactura,
 } from "@/lib/ai/actions"
 
 
@@ -73,6 +74,14 @@ export function FacturaForm({
 
   const [errorIA, setErrorIA] =
     useState<string | null>(null)
+
+  const [fallbackIA, setFallbackIA] =
+  useState<{
+    base64: string
+    mimeType: string
+    logId: string | null
+    mensaje: string
+  } | null>(null)
 
   const inputArchivoRef =
     useRef<HTMLInputElement>(null)
@@ -367,12 +376,139 @@ const montoPagoMostrado =
 
     })
 
+async function aplicarDatosFacturaIA(
+  datos: Awaited<ReturnType<typeof leerFacturaConIA>>
+) {
+
+  setCargos(
+    (datos.cargos ?? []).map((cargo) => ({
+      descripcion: cargo.descripcion,
+      importe: Math.abs(
+        Number(cargo.importe ?? 0)
+      ),
+    }))
+  )
+
+  // -----------------------------------------
+  // Datos generales de la factura
+  // -----------------------------------------
+
+  if (datos.numero)
+    setNumero(datos.numero)
+
+  if (datos.fecha)
+    setFecha(datos.fecha)
+
+  if (datos.fecha_vencimiento)
+    setFechaVencimiento(
+      datos.fecha_vencimiento
+    )
+
+  // -----------------------------------------
+  // Buscar proveedor detectado por IA
+  // -----------------------------------------
+
+  let proveedorDetectadoId =
+    proveedorId
+
+  if (datos.proveedor_nombre) {
+
+    const nombreIA =
+      datos.proveedor_nombre
+        .toLowerCase()
+        .trim()
+
+    const proveedorEncontrado =
+      proveedores.find((proveedor) =>
+        proveedor.nombre_fantasia
+          .toLowerCase()
+          .trim()
+          .includes(nombreIA)
+        ||
+        nombreIA.includes(
+          proveedor.nombre_fantasia
+            .toLowerCase()
+            .trim()
+        )
+      )
+
+    if (proveedorEncontrado) {
+
+      proveedorDetectadoId =
+        proveedorEncontrado.id
+
+      setProveedorId(
+        proveedorEncontrado.id
+      )
+    }
+  }
+
+  // -----------------------------------------
+  // Procesar productos con IA
+  // -----------------------------------------
+
+  if (
+    datos.lineas.length > 0 &&
+    proveedorDetectadoId
+  ) {
+
+    const lineasProcesadas =
+      await procesarLineasFacturaConIA(
+        proveedorDetectadoId,
+        datos.lineas,
+        productos.map((producto) => ({
+          id: producto.id,
+          nombre: producto.nombre,
+        }))
+      )
+
+    setLineas(
+      lineasProcesadas
+    )
+
+  } else {
+
+    setLineas(
+      datos.lineas.map((l) => ({
+        producto_id: "",
+        cantidad: l.cantidad || 1,
+        precio_unitario:
+          l.precio_unitario || 0,
+        iva: l.iva ?? 21,
+
+        descuento:
+          l.descuento ?? 0,
+
+        precio_final:
+          l.precio_final ??
+          Math.max(
+            0,
+            (l.cantidad || 1) *
+              (l.precio_unitario || 0) -
+              (l.descuento ?? 0)
+          ),
+
+        codigo_proveedor:
+          l.codigo_proveedor ??
+          undefined,
+
+        descripcionLeida:
+          l.descripcion,
+
+        autoMatcheado:
+          false,
+      }))
+    )
+  }
+}
+
 async function manejarArchivoIA(
   file: File
 ) {
 
   setLeyendoIA(true)
   setErrorIA(null)
+  setFallbackIA(null)
 
   try {
 
@@ -384,134 +520,59 @@ async function manejarArchivoIA(
         base64,
         file.type
       )
-setCargos(
-  (datos.cargos ?? []).map((cargo) => ({
-    descripcion: cargo.descripcion,
-    importe: Math.abs(Number(cargo.importe ?? 0)),
-  }))
-)
-    // -----------------------------------------
-    // Datos generales de la factura
-    // -----------------------------------------
 
-    if (datos.numero)
-      setNumero(datos.numero)
-
-    if (datos.fecha)
-      setFecha(datos.fecha)
-
-    if (datos.fecha_vencimiento)
-      setFechaVencimiento(
-        datos.fecha_vencimiento
-      )
-
-    // -----------------------------------------
-    // Buscar proveedor detectado por IA
-    // -----------------------------------------
-
-    let proveedorDetectadoId =
-      proveedorId
-
-    if (datos.proveedor_nombre) {
-
-      const nombreIA =
-        datos.proveedor_nombre
-          .toLowerCase()
-          .trim()
-
-      const proveedorEncontrado =
-        proveedores.find((proveedor) =>
-          proveedor.nombre_fantasia
-            .toLowerCase()
-            .trim()
-            .includes(nombreIA)
-          ||
-          nombreIA.includes(
-            proveedor.nombre_fantasia
-              .toLowerCase()
-              .trim()
-          )
-        )
-
-      if (proveedorEncontrado) {
-
-        proveedorDetectadoId =
-          proveedorEncontrado.id
-
-        setProveedorId(
-          proveedorEncontrado.id
-        )
-
-      }
-    }
-
-    // -----------------------------------------
-    // Procesar productos con IA
-    // -----------------------------------------
-
-    if (
-      datos.lineas.length > 0 &&
-      proveedorDetectadoId
-    ) {
-
-      const lineasProcesadas =
-        await procesarLineasFacturaConIA(
-          proveedorDetectadoId,
-          datos.lineas,
-          productos.map((producto) => ({
-            id: producto.id,
-            nombre: producto.nombre,
-          }))
-        )
-
-      setLineas(
-        lineasProcesadas
-      )
-
-    } else {
-
-      // Si no encontramos proveedor,
-      // mostramos igualmente las líneas
-      // pero sin matching automático.
-
-setLineas(
-  datos.lineas.map((l) => ({
-    producto_id: "",
-    cantidad: l.cantidad || 1,
-    precio_unitario: l.precio_unitario || 0,
-    iva: l.iva ?? 21,
-
-    descuento: l.descuento ?? 0,
-
-    precio_final:
-      l.precio_final ??
-      Math.max(
-        0,
-        (l.cantidad || 1) *
-          (l.precio_unitario || 0) -
-          (l.descuento ?? 0)
-      ),
-
-    codigo_proveedor:
-      l.codigo_proveedor ?? undefined,
-
-    descripcionLeida:
-      l.descripcion,
-
-    autoMatcheado:
-      false,
-  }))
-)
-
-    }
+    await aplicarDatosFacturaIA(
+      datos
+    )
 
   } catch (error) {
 
-    setErrorIA(
+    const mensaje =
       error instanceof Error
         ? error.message
         : "No se pudo leer la factura."
-    )
+
+    if (
+      mensaje.startsWith(
+        "GEMINI_FALLBACK_REQUIRED|"
+      )
+    ) {
+
+      const partes =
+        mensaje.split("|")
+
+      const logId =
+        partes[1] || null
+
+      const motivo =
+        partes.slice(2).join("|") ||
+        "Gemini no pudo procesar el documento."
+
+      try {
+
+        const base64 =
+          await archivoABase64(file)
+
+        setFallbackIA({
+          base64,
+          mimeType: file.type,
+          logId,
+          mensaje: motivo,
+        })
+
+        setErrorIA(null)
+
+      } catch {
+
+        setErrorIA(
+          "No se pudo preparar el documento para el procesamiento alternativo."
+        )
+      }
+
+    } else {
+
+      setErrorIA(mensaje)
+    }
 
   } finally {
 
@@ -520,7 +581,43 @@ setLineas(
     if (inputArchivoRef.current) {
       inputArchivoRef.current.value = ""
     }
+  }
+}
 
+async function autorizarOCR() {
+
+  if (!fallbackIA)
+    return
+
+  setLeyendoIA(true)
+  setErrorIA(null)
+
+  try {
+
+    const datos =
+      await usarOCRParaFactura(
+        fallbackIA.base64,
+        fallbackIA.mimeType,
+        fallbackIA.logId
+      )
+
+    await aplicarDatosFacturaIA(
+      datos
+    )
+
+    setFallbackIA(null)
+
+  } catch (error) {
+
+    setErrorIA(
+      error instanceof Error
+        ? error.message
+        : "No se pudo procesar el documento con OCR.space."
+    )
+
+  } finally {
+
+    setLeyendoIA(false)
   }
 }
     return (
@@ -552,12 +649,60 @@ setLineas(
         value={total}
       />
 
-      <CargaIA
-        inputArchivoRef={inputArchivoRef}
-        leyendoIA={leyendoIA}
-        errorIA={errorIA}
-        manejarArchivoIA={manejarArchivoIA}
-      />
+<CargaIA
+  inputArchivoRef={inputArchivoRef}
+  leyendoIA={leyendoIA}
+  errorIA={errorIA}
+  manejarArchivoIA={manejarArchivoIA}
+/>
+
+{fallbackIA && (
+  <div className="rounded-xl border border-amber-300 bg-amber-50 p-5">
+
+    <div className="mb-3">
+      <h3 className="text-base font-semibold text-amber-900">
+        ⚠️ Gemini no pudo procesar el documento
+      </h3>
+
+      <p className="mt-1 text-sm text-amber-800">
+        {fallbackIA.mensaje}
+      </p>
+    </div>
+
+    <p className="mb-4 text-sm text-gray-700">
+      Podés intentar procesarlo con
+      <strong> OCR.space</strong> como alternativa.
+    </p>
+
+    <div className="flex gap-3">
+
+      <button
+        type="button"
+        onClick={autorizarOCR}
+        disabled={leyendoIA}
+        className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        {leyendoIA
+          ? "Procesando con OCR..."
+          : "Usar OCR.space"}
+      </button>
+
+      <button
+        type="button"
+        onClick={() => {
+          setFallbackIA(null)
+          setErrorIA(null)
+        }}
+        disabled={leyendoIA}
+        className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50"
+      >
+        Cancelar
+      </button>
+
+    </div>
+
+  </div>
+)}
 
       <DatosComprobante
         proveedores={proveedores}

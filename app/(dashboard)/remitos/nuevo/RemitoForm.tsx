@@ -7,10 +7,10 @@ import { crearRemito } from "./actions"
 import CargaIA from "./components/CargaIA"
 import DatosComprobante from "./components/DatosComprobante"
 import ProductosRemito, {
-  LineaFactura,
+  LineaRemito,
 } from "./components/ProductosRemito"
 import PagoRemito from "./components/PagoRemito"
-import { leerFacturaConIA } from "@/lib/ai/actions"
+import { leerRemitoConIA } from "@/lib/ai/actions"
 import { matchearProducto } from "@/lib/ai/matchear-producto"
 
 type Proveedor = {
@@ -48,7 +48,7 @@ export function RemitoForm({
   formasPago,
 }: Props) {
 
-  const [lineas, setLineas] = useState<LineaFactura[]>([])
+  const [lineas, setLineas] = useState<LineaRemito[]>([])
 
   const [proveedorId, setProveedorId] = useState("")
   const [numero, setNumero] = useState("")
@@ -94,7 +94,7 @@ export function RemitoForm({
 
   const actualizarLinea = (
     index: number,
-    campo: keyof LineaFactura,
+    campo: keyof LineaRemito,
     valor: string | number
   ) => {
     setLineas((prev) =>
@@ -199,7 +199,7 @@ export function RemitoForm({
         await archivoABase64(file)
 
       const datos =
-        await leerFacturaConIA(
+        await leerRemitoConIA(
           base64,
           file.type
         )
@@ -336,10 +336,6 @@ export function RemitoForm({
         setNumero={setNumero}
         fecha={fecha}
         setFecha={setFecha}
-        fechaVencimiento={fechaVencimiento}
-        setFechaVencimiento={
-          setFechaVencimiento
-        }
       />
 
       <ProductosRemito
