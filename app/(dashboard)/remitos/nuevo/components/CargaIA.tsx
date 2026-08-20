@@ -18,13 +18,10 @@ export default function CargaIA({
   return (
     <div className="rounded-xl bg-white p-6 shadow">
       <div className="mb-4">
-        <h2 className="text-xl font-semibold">
-          🤖 Procesar comprobante con IA
-        </h2>
-
+        <h2 className="text-xl font-semibold">🤖 Procesar comprobante con IA</h2>
         <p className="mt-1 text-sm text-gray-500">
           Subí una imagen o un PDF. La IA intentará completar automáticamente
-          el proveedor, número, fechas y productos de la factura.
+          el proveedor, número, fechas, productos, descuentos y bonificaciones.
         </p>
       </div>
 
@@ -36,10 +33,7 @@ export default function CargaIA({
         className="block w-full rounded-lg border border-gray-300 p-2 text-sm"
         onChange={(e) => {
           const archivo = e.target.files?.[0];
-
-          if (archivo) {
-            manejarArchivoIA(archivo);
-          }
+          if (archivo) manejarArchivoIA(archivo);
         }}
       />
 
