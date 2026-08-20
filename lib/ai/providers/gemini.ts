@@ -61,13 +61,12 @@ export async function extraerConGemini(
   }
 
   const ai = new GoogleGenAI({ apiKey })
-
   const modelo = process.env.GEMINI_MODEL || "gemini-3.5-flash"
 
   const contexto =
     tipo === "factura"
       ? "Es una FACTURA de compra argentina."
-      : "Es un REMITO de compra argentino."
+      : "Es un REMITO de compra argentino. Un remito no lleva IVA, impuestos internos ni percepciones. Puede contener descuentos y bonificaciones comerciales. IVA debe devolverse como null y los impuestos/percepciones como 0 o no informados."
 
   const prompt = `
 Sos un analista experto en comprobantes de compra de Argentina.
@@ -116,6 +115,13 @@ Para cada producto real del comprobante identificá:
 - precio_unitario
 - iva
 - descuento
+- porcentaje_descuento
+- bonificacion_importe
+- bonificacion_tipo
+- cantidad_bonificada
+- precio_bruto_unitario
+- precio_neto_unitario
+- subtotal_neto
 - precio_final
 
 ==================================================
@@ -139,30 +145,8 @@ NO uses para precio_unitario:
 - ningún importe obtenido de otra columna
 
 Si una línea tiene una bonificación del 100%, el precio_unitario
-SIGUE siendo el precio unitario original impreso en la factura.
-La bonificación debe quedar en descuento/bonificación y no modificar
-precio_unitario.
-
-Ejemplo:
-
-Cantidad: 3
-P.UNITARIO: 47.083,61
-BONIF: 100%
-SUBTOTAL NETO: 0,00
-
-Debe devolverse:
-
-cantidad = 3
-precio_unitario = 47083.61
-descuento = 141250.83
-precio_final = 0
-
-NO debe devolverse precio_unitario = 0 ni ningún importe tomado
-del subtotal neto.
-
-Si existen varias columnas numéricas cercanas, verificá primero
-el encabezado de cada columna y asociá cada valor con su columna
-antes de devolverlo.
+SIGUE siendo el precio unitario original impreso en el comprobante.
+La bonificación debe quedar separada y no modificar precio_unitario.
 
 El precio_unitario NUNCA debe ser negativo.
 
@@ -178,8 +162,6 @@ Los descuentos pueden aparecer de distintas maneras.
 CASO 1:
 El descuento aparece directamente en la línea del producto.
 
-Ejemplo:
-
 Producto X
 Precio: 1000
 Descuento: 100
@@ -194,16 +176,14 @@ precio_final = 900
 CASO 2:
 El descuento aparece como porcentaje.
 
-Ejemplo:
-
 Producto X
 Precio: 1000
-
 Descuento 10%
 
 En ese caso:
 
 descuento = 100
+porcentaje_descuento = 10
 precio_final = 900
 
 --------------------------------------------------
@@ -212,22 +192,9 @@ CASO 3:
 El descuento aparece como una línea SEPARADA
 que corresponde a un grupo o segmento de productos.
 
-Ejemplo:
-
-6 Producto A 500 ml
-6 Producto B 500 ml
-6 Producto C 500 ml
-
-30% PRODUCTOS 500 ML
-
-En este caso la línea "30% PRODUCTOS 500 ML"
-NO es un producto.
-
-Debe interpretarse como un descuento aplicado
-a los productos del grupo correspondiente.
-
-El descuento debe distribuirse entre los productos
-que pertenecen a ese segmento.
+La línea de descuento NO es un producto.
+Debe distribuirse proporcionalmente entre los productos
+correspondientes al segmento.
 
 --------------------------------------------------
 
@@ -235,21 +202,9 @@ CASO 4:
 El descuento aparece como un importe negativo
 en una línea separada.
 
-Ejemplo:
-
-Producto A
-Producto B
-Producto C
--38.380,01 DESCUENTO PRODUCTOS 500 ML
-
-Ese importe negativo representa un descuento.
-
+Ese importe representa un descuento.
 NO debe convertirse en un producto.
-
-NO debe aparecer como un producto con precio negativo.
-
-Debe distribuirse entre los productos correspondientes
-al segmento.
+Debe distribuirse entre los productos correspondientes.
 
 --------------------------------------------------
 
@@ -257,30 +212,15 @@ REGLA PARA DISTRIBUIR DESCUENTOS DE SEGMENTO:
 
 Primero identificá qué productos pertenecen al segmento.
 
-Luego calculá el neto bruto de esos productos:
+Luego calculá el bruto de esos productos:
 
 cantidad × precio_unitario
 
 Después distribuí el descuento proporcionalmente
-entre esos productos según su participación en el neto
-del segmento.
-
-Ejemplo:
-
-Producto A = 10.000
-Producto B = 20.000
-Producto C = 30.000
-
-Descuento del segmento = 12.000
-
-Entonces:
-
-Producto A → descuento 2.000
-Producto B → descuento 4.000
-Producto C → descuento 6.000
+según la participación de cada producto en el bruto del segmento.
 
 El total del descuento distribuido debe coincidir
-con el descuento original del comprobante.
+con el descuento original del comprobante cuando sea posible.
 
 ==================================================
 BONIFICACIONES
@@ -296,10 +236,16 @@ por ejemplo:
 
 No conviertas la bonificación en un producto separado.
 
-Conservá siempre el precio_unitario original de la línea.
+Conservá siempre el precio_unitario original.
 
 Si el comprobante permite identificar la cantidad bonificada,
-utilizá esa información para determinar el importe bonificado.
+utilizá esa información.
+
+Cuando pueda determinarse:
+
+cantidad_bonificada = cantidad de unidades regaladas
+bonificacion_importe = precio correspondiente a esas unidades
+bonificacion_tipo = descripción breve, por ejemplo "3x2", "5x4" o "100%"
 
 ==================================================
 REGLAS IMPORTANTES DE DESCUENTOS Y BONIFICACIONES
@@ -313,17 +259,16 @@ REGLAS IMPORTANTES DE DESCUENTOS Y BONIFICACIONES
 - Si el descuento corresponde a un grupo, distribuílo proporcionalmente.
 - Si existe bonificación por cantidad, conservá el precio unitario original.
 - Si no existe descuento, descuento debe ser 0.
-- precio_final debe representar el valor neto de la línea después del descuento.
-- La suma de los descuentos de las líneas debe coincidir con el descuento total cuando sea posible determinarlo.
+- Si no existe bonificación, bonificacion_importe debe ser 0.
+- precio_neto_unitario debe representar el costo neto por unidad luego de descuentos y bonificaciones.
+- subtotal_neto debe representar cantidad × precio_neto_unitario.
+- precio_final debe representar el subtotal neto de la línea.
 
 ==================================================
 IMPUESTOS Y PERCEPCIONES
 ==================================================
 
-Prestá especial atención a las columnas y conceptos
-que aparecen después del subtotal.
-
-Pueden existir:
+Para FACTURAS, prestá especial atención a:
 
 - IVA
 - Impuestos internos
@@ -334,58 +279,52 @@ Pueden existir:
 - otros cargos
 
 No confundas IVA con percepción de IVA.
-
 No confundas impuestos internos con percepciones.
 
-Los conceptos que no correspondan al precio de los productos
-deben aparecer en "cargos".
+Para REMITOS:
 
-Cada cargo debe contener:
+- no agregues IVA
+- no agregues impuestos internos
+- no agregues percepciones
+- no inventes cargos fiscales
 
-descripcion
-importe
-
-Si el importe aparece negativo por la forma de impresión
-del comprobante, interpretalo según el concepto.
-Una percepción o impuesto cobrado debe quedar como importe positivo.
+Los conceptos fiscales solo deben aparecer cuando realmente estén
+informados en una FACTURA.
 
 ==================================================
 IMPUESTOS INTERNOS
 ==================================================
 
-Los impuestos internos pueden aparecer:
+Los impuestos internos pueden aparecer por línea, como columna
+o como total al pie de una FACTURA.
 
-- por línea
-- como columna
-- como total al pie del comprobante.
-
-Si aparecen como total separado y no están asociados
-claramente a una línea específica, registralos como cargo
-con una descripción clara, por ejemplo:
-
-"Impuestos Internos"
-
-No los confundas con IVA.
+Si aparecen como total separado y no están asociados claramente
+a una línea específica, registralos como cargo con una descripción clara.
 
 ==================================================
 VALIDACIÓN
 ==================================================
 
-Antes de responder verificá matemáticamente:
+Antes de responder verificá matemáticamente cuando la información
+lo permita:
 
 subtotal_bruto
 - descuento_total
 = subtotal_neto
 
-Cuando la información disponible lo permita.
-
-También verificá:
-
+Para facturas:
 subtotal_neto
 + IVA
 + impuestos/cargos
 + percepciones
 ≈ total
+
+Para remitos:
+subtotal_bruto
+- descuento_total
+- bonificaciones
+= subtotal_neto
+= total cuando no existan otros conceptos comerciales.
 
 Puede existir una diferencia mínima por redondeos.
 
@@ -396,13 +335,10 @@ NO corrijas el precio unitario para hacerlo coincidir.
 El precio unitario debe conservar el valor impreso.
 
 ==================================================
-
 IMPORTANTE FINAL
 
 No agregues explicaciones.
-
 No agregues texto fuera del JSON.
-
 Respondé únicamente el JSON solicitado.
 `
 
@@ -458,6 +394,13 @@ Respondé únicamente el JSON solicitado.
       precio_unitario: Math.abs(Number(l.precio_unitario ?? 0)),
       iva: l.iva ?? null,
       descuento: Math.abs(Number(l.descuento ?? 0)),
+      porcentaje_descuento: l.porcentaje_descuento ?? null,
+      bonificacion_importe: Math.abs(Number(l.bonificacion_importe ?? 0)),
+      bonificacion_tipo: l.bonificacion_tipo ?? null,
+      cantidad_bonificada: l.cantidad_bonificada ?? null,
+      precio_bruto_unitario: l.precio_bruto_unitario ?? null,
+      precio_neto_unitario: l.precio_neto_unitario ?? null,
+      subtotal_neto: l.subtotal_neto ?? null,
       precio_final: l.precio_final ?? null,
       codigo_proveedor: l.codigo_proveedor ?? null,
       producto_id: undefined,
