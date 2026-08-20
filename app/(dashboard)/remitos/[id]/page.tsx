@@ -52,10 +52,10 @@ export default async function RemitoDetallePage({ params }: Props) {
     .eq("remito_id", id)
 
   const itemsNormalizados = (items ?? []).map((item) => ({
-    ...item,
-    productos: Array.isArray(item.productos)
+    ...(item ?? {}),
+    productos: Array.isArray(item?.productos)
       ? item.productos[0] ?? null
-      : item.productos,
+      : item?.productos ?? null,
   }))
 
   const [{ data: pagos }, { data: formasPago }] = await Promise.all([
@@ -134,7 +134,10 @@ export default async function RemitoDetallePage({ params }: Props) {
                   Number(item.cantidad ?? 0) * Number(item.precio_unitario ?? 0)
                 const descuento = Number(item.descuento_importe ?? 0)
                 const bonificacion = Number(item.bonificacion_importe ?? 0)
-                const neto = Number(item.subtotal_neto ?? Math.max(0, bruto - descuento - bonificacion))
+                const neto = Number(
+                  item.subtotal_neto ??
+                  Math.max(0, bruto - descuento - bonificacion)
+                )
 
                 return (
                   <tr key={item.id} className="border-b last:border-0">
@@ -143,7 +146,7 @@ export default async function RemitoDetallePage({ params }: Props) {
                     <td className="py-3">{item.productos?.unidad_medida ?? "—"}</td>
                     <td className="py-3 text-right">{item.cantidad}</td>
                     <td className="py-3 text-right">
-                      ${Number(item.precio_unitario).toLocaleString("es-AR")}
+                      ${Number(item.precio_unitario ?? 0).toLocaleString("es-AR")}
                     </td>
                     <td className="py-3 text-right">
                       {descuento > 0 && (
