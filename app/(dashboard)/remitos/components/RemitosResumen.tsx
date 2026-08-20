@@ -3,10 +3,10 @@ type Props = {
   totalComprado: number;
   totalPagado: number;
   totalPendiente: number;
-
   pendientes: number;
   parciales: number;
   pagados: number;
+  vencidos: number;
 };
 
 export default function RemitosResumen({
@@ -17,70 +17,62 @@ export default function RemitosResumen({
   pendientes,
   parciales,
   pagados,
+  vencidos,
 }: Props) {
+  const cards = [
+    {
+      titulo: "Total comprobantes",
+      valor: totalComprobantes,
+      color: "bg-blue-50 text-blue-700",
+      icono: "📄",
+    },
+    {
+      titulo: "Pagados",
+      valor: pagados,
+      color: "bg-green-50 text-green-700",
+      icono: "🟢",
+    },
+    {
+      titulo: "Parciales",
+      valor: parciales,
+      color: "bg-yellow-50 text-yellow-700",
+      icono: "🟡",
+    },
+    {
+      titulo: "Pendientes",
+      valor: pendientes,
+      color: "bg-gray-100 text-gray-700",
+      icono: "⚪",
+    },
+    {
+      titulo: "Vencidos",
+      valor: vencidos,
+      color: "bg-red-50 text-red-700",
+      icono: "🔴",
+    },
+    {
+      titulo: "Monto pendiente",
+      valor: `$${totalPendiente.toLocaleString("es-AR")}`,
+      color: "bg-indigo-50 text-indigo-700",
+      icono: "💰",
+    },
+  ];
+
   return (
-    <div className="grid gap-4 md:grid-cols-3 xl:grid-cols-6">
-
-      <div className="rounded-xl bg-white p-5 shadow">
-        <p className="text-sm text-gray-500">
-          Comprobantes
-        </p>
-
-        <p className="mt-2 text-2xl font-bold">
-          {totalComprobantes}
-        </p>
-      </div>
-
-      <div className="rounded-xl bg-white p-5 shadow">
-        <p className="text-sm text-gray-500">
-          Total comprado
-        </p>
-
-        <p className="mt-2 text-2xl font-bold">
-          ${totalComprado.toLocaleString("es-AR")}
-        </p>
-      </div>
-
-      <div className="rounded-xl bg-white p-5 shadow">
-        <p className="text-sm text-gray-500">
-          Total pagado
-        </p>
-
-        <p className="mt-2 text-2xl font-bold text-green-700">
-          ${totalPagado.toLocaleString("es-AR")}
-        </p>
-      </div>
-
-      <div className="rounded-xl bg-white p-5 shadow">
-        <p className="text-sm text-gray-500">
-          Saldo pendiente
-        </p>
-
-        <p className="mt-2 text-2xl font-bold text-amber-700">
-          ${totalPendiente.toLocaleString("es-AR")}
-        </p>
-      </div>
-
-      <div className="rounded-xl bg-white p-5 shadow">
-        <p className="text-sm text-gray-500">
-          Pendientes
-        </p>
-
-        <p className="mt-2 text-2xl font-bold">
-          {pendientes}
-        </p>
-      </div>
-
-      <div className="rounded-xl bg-white p-5 shadow">
-        <p className="text-sm text-gray-500">
-          Pagados / Parciales
-        </p>
-
-        <p className="mt-2 text-2xl font-bold">
-          {pagados} / {parciales}
-        </p>
-      </div>
-
+    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-6">
+      {cards.map((card) => (
+        <div
+          key={card.titulo}
+          className={`rounded-xl p-4 shadow ${card.color}`}
+        >
+          <p className="text-sm font-medium">
+            {card.icono} {card.titulo}
+          </p>
+          <p className="mt-2 text-2xl font-bold">
+            {card.valor}
+          </p>
+        </div>
+      ))}
     </div>
   );
 }
