@@ -150,6 +150,38 @@ ANTES de descuentos y bonificaciones.
 Nunca pongas un precio_unitario negativo.
 
 ==================================================
+IVA POR PRODUCTO
+==================================================
+
+El campo "iva" representa la ALICUOTA de IVA en porcentaje.
+Ejemplos válidos: 21, 10.5, 27, 0.
+
+El campo "iva_importe" representa el IMPORTE de IVA de esa línea.
+
+Si la alícuota no aparece junto a cada producto pero aparece en el
+pie de la factura, utilizá esa alícuota para los productos cuando
+la estructura de la factura indique que corresponde a todas las líneas.
+
+Ejemplo:
+
+Subtotal neto = 681502.60
+IVA = 71557.77
+
+71557.77 / 681502.60 = 10.5%
+
+En ese caso:
+
+iva = 10.5
+iva_importe = 71557.77
+
+No dejes "iva" en null si la alícuota puede determinarse claramente
+a partir del comprobante y de sus totales.
+
+Si existen varias alícuotas y no puede determinarse con seguridad
+qué productos corresponden a cada una, dejá la alícuota de esas
+líneas en null y conservá el IVA total real.
+
+==================================================
 TIPOS DE DESCUENTO Y BONIFICACIÓN
 ==================================================
 
@@ -480,6 +512,42 @@ Respondé únicamente el JSON solicitado.
   const data =
     JSON.parse(texto) as ComprobanteExtraido
 
+  const lineasBase = data.lineas ?? []
+
+  const ivaInformado = lineasBase.some(
+    (linea) =>
+      linea.iva != null &&
+      Number.isFinite(Number(linea.iva))
+  )
+
+  let tasaIVADerivada: number | null = null
+
+  if (
+    !ivaInformado &&
+    data.iva_total != null &&
+    data.subtotal_neto != null &&
+    Number(data.subtotal_neto) > 0
+  ) {
+    const tasa =
+      (Number(data.iva_total) /
+        Number(data.subtotal_neto)) * 100
+
+    const tasasValidas = [
+      0,
+      2.5,
+      5,
+      10.5,
+      21,
+      27,
+    ]
+
+    tasaIVADerivada =
+      tasasValidas.find(
+        (valor) =>
+          Math.abs(tasa - valor) < 0.15
+      ) ?? null
+  }
+
   return {
 
     proveedor_nombre:
@@ -521,124 +589,131 @@ Respondé únicamente el JSON solicitado.
       data.total ?? null,
 
     lineas:
-      (data.lineas ?? []).map((l) => ({
-
-        descripcion:
-          l.descripcion,
-
-        cantidad:
-          Number(l.cantidad ?? 0),
-
-        cantidad_bonificada:
-          l.cantidad_bonificada ?? null,
-
-        precio_unitario:
-          Math.abs(
-            Number(
-              l.precio_unitario ?? 0
-            )
-          ),
-
-        descuento:
-          Math.abs(
-            Number(
-              l.descuento ?? 0
-            )
-          ),
-
-        porcentaje_descuento:
-          l.porcentaje_descuento ?? null,
-
-        tipo_descuento:
-          l.tipo_descuento ?? null,
-
-        descuentos:
-          (l.descuentos ?? []).map(
-            (descuento) => ({
-              porcentaje:
-                descuento.porcentaje ?? null,
-
-              importe:
-                descuento.importe != null
-                  ? Math.abs(
-                      Number(
-                        descuento.importe
-                      )
-                    )
-                  : null,
-
-              descripcion:
-                descuento.descripcion ?? null,
-            })
-          ),
-
-        grupo_descuento:
-          l.grupo_descuento ?? null,
-
-        bonificacion:
-          l.bonificacion != null
-            ? Math.abs(
-                Number(l.bonificacion)
-              )
-            : null,
-
-        tipo_bonificacion:
-          l.tipo_bonificacion ?? null,
-
-        cantidad_bonificada_detalle:
-          l.cantidad_bonificada_detalle ?? null,
-
-        precio_neto:
-          l.precio_neto != null
-            ? Number(l.precio_neto)
-            : null,
-
-        precio_final:
-          l.precio_final != null
-            ? Number(l.precio_final)
-            : null,
-
-        subtotal_neto:
+      lineasBase.map((l) => {
+        const subtotalNeto =
           l.subtotal_neto != null
             ? Number(l.subtotal_neto)
-            : null,
+            : null
 
-        iva:
-          l.iva ?? null,
+        const ivaDerivado =
+          l.iva ?? tasaIVADerivada
 
-        iva_importe:
-          l.iva_importe != null
-            ? Number(l.iva_importe)
-            : null,
+        return {
+          descripcion:
+            l.descripcion,
 
-        impuestos_internos:
-          l.impuestos_internos != null
-            ? Math.abs(
-                Number(
-                  l.impuestos_internos
-                )
+          cantidad:
+            Number(l.cantidad ?? 0),
+
+          cantidad_bonificada:
+            l.cantidad_bonificada ?? null,
+
+          precio_unitario:
+            Math.abs(
+              Number(
+                l.precio_unitario ?? 0
               )
-            : null,
+            ),
 
-        codigo_proveedor:
-          l.codigo_proveedor ?? null,
+          descuento:
+            Math.abs(
+              Number(
+                l.descuento ?? 0
+              )
+            ),
 
-        producto_id:
-          undefined,
+          porcentaje_descuento:
+            l.porcentaje_descuento ?? null,
 
-        score:
-          undefined,
+          tipo_descuento:
+            l.tipo_descuento ?? null,
 
-        confianza:
-          undefined,
+          descuentos:
+            (l.descuentos ?? []).map(
+              (descuento) => ({
+                porcentaje:
+                  descuento.porcentaje ?? null,
 
-        motivo:
-          undefined,
+                importe:
+                  descuento.importe != null
+                    ? Math.abs(
+                        Number(
+                          descuento.importe
+                        )
+                      )
+                    : null,
 
-        fuente:
-          undefined,
+                descripcion:
+                  descuento.descripcion ?? null,
+              })
+            ),
 
-      })),
+          grupo_descuento:
+            l.grupo_descuento ?? null,
 
+          bonificacion:
+            l.bonificacion != null
+              ? Math.abs(
+                  Number(l.bonificacion)
+                )
+              : null,
+
+          tipo_bonificacion:
+            l.tipo_bonificacion ?? null,
+
+          cantidad_bonificada_detalle:
+            l.cantidad_bonificada_detalle ?? null,
+
+          precio_neto:
+            l.precio_neto != null
+              ? Number(l.precio_neto)
+              : null,
+
+          precio_final:
+            l.precio_final != null
+              ? Number(l.precio_final)
+              : null,
+
+          subtotal_neto:
+            subtotalNeto,
+
+          iva:
+            ivaDerivado,
+
+          iva_importe:
+            l.iva_importe != null
+              ? Number(l.iva_importe)
+              : tasaIVADerivada != null && subtotalNeto != null
+                ? subtotalNeto * (tasaIVADerivada / 100)
+                : null,
+
+          impuestos_internos:
+            l.impuestos_internos != null
+              ? Math.abs(
+                  Number(
+                    l.impuestos_internos
+                  )
+                )
+              : null,
+
+          codigo_proveedor:
+            l.codigo_proveedor ?? null,
+
+          producto_id:
+            undefined,
+
+          score:
+            undefined,
+
+          confianza:
+            undefined,
+
+          motivo:
+            undefined,
+
+          fuente:
+            undefined,
+        }
+      }),
   }
 }
