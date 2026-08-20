@@ -14,6 +14,12 @@ export type LineaExtraida = {
 
   descuento?: number | null
   porcentaje_descuento?: number | null
+  tipo_descuento?: string | null
+  descuentos?: {
+    porcentaje?: number | null
+    importe?: number | null
+    descripcion?: string | null
+  }[]
 
   // Bonificación comercial: 3x2, 5x4, unidades bonificadas, etc.
   bonificacion_importe?: number | null
