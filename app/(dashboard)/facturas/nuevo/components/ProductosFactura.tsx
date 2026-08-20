@@ -102,10 +102,10 @@ export default function ProductosFactura({
             <div className="mb-3 grid grid-cols-[minmax(260px,3fr)_80px_120px_90px_90px_120px_70px_110px_110px_120px_40px] gap-3 border-b pb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
               <div>Producto</div>
               <div className="text-center">Cant.</div>
-              <div className="text-right">P. Unit.</div>
+              <div className="text-right">P. Unit. Bruto</div>
               <div className="text-right">Dto.</div>
               <div className="text-right">Bonif.</div>
-              <div className="text-right">P. Neto</div>
+              <div className="text-right">P. Neto Unit.</div>
               <div className="text-center">IVA %</div>
               <div className="text-right">IVA $</div>
               <div className="text-right">Imp. Int.</div>
@@ -116,9 +116,13 @@ export default function ProductosFactura({
             {lineas.map((linea, index) => {
               const cantidad = Number(linea.cantidad ?? 0);
               const precioUnitario = Number(linea.precio_unitario ?? 0);
-              const bruto = cantidad * precioUnitario;
-              const descuento = Number(linea.descuento ?? 0);
-              const bonificacion = Number(linea.bonificacion ?? 0);
+              const precioBrutoUnitario =
+                linea.precio_bruto_unitario != null
+                  ? Math.abs(Number(linea.precio_bruto_unitario))
+                  : Math.abs(precioUnitario);
+              const bruto = cantidad * precioBrutoUnitario;
+              const descuento = Math.abs(Number(linea.descuento ?? 0));
+              const bonificacion = Math.abs(Number(linea.bonificacion ?? 0));
               const cantidadBonificada = Math.min(
                 Math.max(
                   0,
@@ -132,20 +136,20 @@ export default function ProductosFactura({
               );
               const bonificacionCantidad =
                 linea.tipo_bonificacion === "cantidad"
-                  ? cantidadBonificada * precioUnitario
+                  ? cantidadBonificada * precioBrutoUnitario
                   : 0;
               const totalBonificacion =
                 bonificacion + bonificacionCantidad;
               const subtotalNeto =
                 linea.subtotal_neto != null
-                  ? Number(linea.subtotal_neto)
+                  ? Math.abs(Number(linea.subtotal_neto))
                   : Math.max(
                       0,
                       bruto - descuento - totalBonificacion
                     );
               const precioNeto =
                 linea.precio_neto != null
-                  ? Number(linea.precio_neto)
+                  ? Math.abs(Number(linea.precio_neto))
                   : cantidad > 0
                     ? subtotalNeto / cantidad
                     : 0;
@@ -153,11 +157,11 @@ export default function ProductosFactura({
                 linea.iva_importe ??
                   subtotalNeto * (Number(linea.iva ?? 0) / 100)
               );
-              const impuestosInternos = Number(
-                linea.impuestos_internos ?? 0
+              const impuestosInternos = Math.abs(
+                Number(linea.impuestos_internos ?? 0)
               );
               const totalLinea =
-                subtotalNeto + ivaImporte + impuestosInternos;
+                subtotalNeto + Math.abs(ivaImporte) + impuestosInternos;
 
               return (
                 <div
@@ -184,21 +188,21 @@ export default function ProductosFactura({
                     {!linea.producto_id &&
                       !linea.producto_sugerido_id &&
                       linea.descripcionLeida && (
-                        <button
-                          type="button"
-                          onClick={() =>
-                            crearProductoDesdeLinea(
-                              index,
-                              linea.descripcionLeida ?? "",
-                              Number(linea.precio_unitario ?? 0),
-                              Number(linea.iva ?? 21)
-                            )
-                          }
-                          className="mt-2 w-full rounded-md bg-green-600 px-3 py-2 text-xs font-semibold text-white hover:bg-green-700"
-                        >
-                          + Crear este producto
-                        </button>
-                      )}
+                      <button
+                        type="button"
+                        onClick={() =>
+                          crearProductoDesdeLinea(
+                            index,
+                            linea.descripcionLeida ?? "",
+                            Number(linea.precio_unitario ?? 0),
+                            Number(linea.iva ?? 21)
+                          )
+                        }
+                        className="mt-2 w-full rounded-md bg-green-600 px-3 py-2 text-xs font-semibold text-white hover:bg-green-700"
+                      >
+                        + Crear este producto
+                      </button>
+                    )}
 
                     {linea.confianza === "alta" && (
                       <div className="mt-2 rounded-md bg-green-50 p-2">
@@ -213,47 +217,47 @@ export default function ProductosFactura({
 
                     {linea.confianza === "media" &&
                       linea.producto_sugerido_id && (
-                        <div className="mt-2 rounded-md border border-yellow-200 bg-yellow-50 p-3">
-                          <p className="text-xs font-semibold text-yellow-700">
-                            🟡 Sugerencia de IA · {linea.score ?? 0}% de confianza
+                      <div className="mt-2 rounded-md border border-yellow-200 bg-yellow-50 p-3">
+                        <p className="text-xs font-semibold text-yellow-700">
+                          🟡 Sugerencia de IA · {linea.score ?? 0}% de confianza
+                        </p>
+                        <p className="mt-1 text-xs text-yellow-700">
+                          {linea.motivo}
+                        </p>
+                        <div className="mt-2 rounded-md bg-white p-2">
+                          <p className="text-[11px] text-gray-500">
+                            Producto sugerido
                           </p>
-                          <p className="mt-1 text-xs text-yellow-700">
-                            {linea.motivo}
+                          <p className="text-sm font-semibold text-gray-800">
+                            {linea.producto_sugerido_nombre}
                           </p>
-                          <div className="mt-2 rounded-md bg-white p-2">
-                            <p className="text-[11px] text-gray-500">
-                              Producto sugerido
-                            </p>
-                            <p className="text-sm font-semibold text-gray-800">
-                              {linea.producto_sugerido_nombre}
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() =>
-                              actualizarProductoDeLinea(
-                                index,
-                                linea.producto_sugerido_id!
-                              )
-                            }
-                            className="mt-2 w-full rounded-md bg-yellow-500 px-3 py-2 text-xs font-semibold text-white hover:bg-yellow-600"
-                          >
-                            ✓ Usar esta sugerencia
-                          </button>
                         </div>
-                      )}
+                        <button
+                          type="button"
+                          onClick={() =>
+                            actualizarProductoDeLinea(
+                              index,
+                              linea.producto_sugerido_id!
+                            )
+                          }
+                          className="mt-2 w-full rounded-md bg-yellow-500 px-3 py-2 text-xs font-semibold text-white hover:bg-yellow-600"
+                        >
+                          ✓ Usar esta sugerencia
+                        </button>
+                      </div>
+                    )}
 
                     {linea.confianza === "media" &&
                       !linea.producto_sugerido_id && (
-                        <div className="mt-2 rounded-md bg-yellow-50 p-2">
-                          <p className="text-xs font-semibold text-yellow-700">
-                            🟡 Coincidencia parcial
-                          </p>
-                          <p className="text-xs text-yellow-700">
-                            {linea.motivo}
-                          </p>
-                        </div>
-                      )}
+                      <div className="mt-2 rounded-md bg-yellow-50 p-2">
+                        <p className="text-xs font-semibold text-yellow-700">
+                          🟡 Coincidencia parcial
+                        </p>
+                        <p className="text-xs text-yellow-700">
+                          {linea.motivo}
+                        </p>
+                      </div>
+                    )}
 
                     {linea.confianza === "baja" && (
                       <div className="mt-2 rounded-md bg-red-50 p-2">
@@ -344,7 +348,7 @@ export default function ProductosFactura({
                   </select>
 
                   <div className="rounded-lg bg-blue-50 p-2 text-right text-sm font-medium text-blue-700">
-                    ${dinero(ivaImporte)}
+                    ${dinero(Math.abs(ivaImporte))}
                   </div>
 
                   <div className="rounded-lg bg-orange-50 p-2 text-right text-sm font-medium text-orange-700">
