@@ -28,38 +28,25 @@ async function withRetry<T>(
   retries = 3,
   delayMs = 2000
 ): Promise<T> {
-
   let lastError: unknown
 
   for (let i = 0; i < retries; i++) {
-
     try {
-
       return await fn()
-
     } catch (error) {
-
       lastError = error
 
       if (isServiceUnavailable(error)) {
-
-        await new Promise((res) =>
-          setTimeout(res, delayMs)
-        )
-
+        await new Promise((res) => setTimeout(res, delayMs))
       } else {
-
         throw error
-
       }
     }
   }
 
   throw lastError instanceof Error
     ? lastError
-    : new Error(
-        "Gemini no respondió tras varios intentos"
-      )
+    : new Error("Gemini no respondió tras varios intentos")
 }
 
 export async function extraerConGemini(
@@ -67,22 +54,15 @@ export async function extraerConGemini(
   mimeType: string,
   tipo: TipoComprobanteIA
 ): Promise<ComprobanteExtraido> {
-
-  const apiKey =
-    process.env.GEMINI_API_KEY
+  const apiKey = process.env.GEMINI_API_KEY
 
   if (!apiKey) {
-    throw new Error(
-      "Falta la variable de entorno GEMINI_API_KEY"
-    )
+    throw new Error("Falta la variable de entorno GEMINI_API_KEY")
   }
 
-  const ai =
-    new GoogleGenAI({ apiKey })
+  const ai = new GoogleGenAI({ apiKey })
 
-  const modelo =
-    process.env.GEMINI_MODEL ||
-    "gemini-3.5-flash"
+  const modelo = process.env.GEMINI_MODEL || "gemini-3.5-flash"
 
   const contexto =
     tipo === "factura"
@@ -138,9 +118,51 @@ Para cada producto real del comprobante identificá:
 - descuento
 - precio_final
 
-IMPORTANTE:
+==================================================
+REGLA CRÍTICA: PRECIO UNITARIO
+==================================================
 
-"precio_unitario" representa el precio de compra ANTES del descuento.
+"precio_unitario" DEBE ser exclusivamente el importe que aparece
+impreso en la columna/campo "P.UNITARIO", "PRECIO UNIT.", "UNIT. NETO"
+o equivalente que represente el precio unitario del producto ANTES
+de aplicar el descuento o bonificación.
+
+NO uses para precio_unitario:
+
+- subtotal de la línea
+- subtotal neto
+- importe total de la línea
+- IVA
+- impuestos internos
+- precio neto después del descuento
+- precio de otro producto
+- ningún importe obtenido de otra columna
+
+Si una línea tiene una bonificación del 100%, el precio_unitario
+SIGUE siendo el precio unitario original impreso en la factura.
+La bonificación debe quedar en descuento/bonificación y no modificar
+precio_unitario.
+
+Ejemplo:
+
+Cantidad: 3
+P.UNITARIO: 47.083,61
+BONIF: 100%
+SUBTOTAL NETO: 0,00
+
+Debe devolverse:
+
+cantidad = 3
+precio_unitario = 47083.61
+descuento = 141250.83
+precio_final = 0
+
+NO debe devolverse precio_unitario = 0 ni ningún importe tomado
+del subtotal neto.
+
+Si existen varias columnas numéricas cercanas, verificá primero
+el encabezado de cada columna y asociá cada valor con su columna
+antes de devolverlo.
 
 El precio_unitario NUNCA debe ser negativo.
 
@@ -261,7 +283,26 @@ El total del descuento distribuido debe coincidir
 con el descuento original del comprobante.
 
 ==================================================
-REGLAS IMPORTANTES DE DESCUENTOS
+BONIFICACIONES
+==================================================
+
+También pueden existir bonificaciones comerciales por cantidad,
+por ejemplo:
+
+- 3 unidades y 1 bonificada
+- 5 unidades y 1 bonificada
+- 5 unidades y 2 bonificadas
+- bonificación 100%
+
+No conviertas la bonificación en un producto separado.
+
+Conservá siempre el precio_unitario original de la línea.
+
+Si el comprobante permite identificar la cantidad bonificada,
+utilizá esa información para determinar el importe bonificado.
+
+==================================================
+REGLAS IMPORTANTES DE DESCUENTOS Y BONIFICACIONES
 ==================================================
 
 - Nunca inventes descuentos.
@@ -270,11 +311,10 @@ REGLAS IMPORTANTES DE DESCUENTOS
 - Si el descuento aparece negativo, utilizá su valor absoluto.
 - Si el descuento aparece como porcentaje, calculá su importe.
 - Si el descuento corresponde a un grupo, distribuílo proporcionalmente.
+- Si existe bonificación por cantidad, conservá el precio unitario original.
 - Si no existe descuento, descuento debe ser 0.
-- precio_final debe representar el valor neto de la línea
-  después del descuento.
-- La suma de los descuentos de las líneas debe coincidir
-  con el descuento total cuando sea posible determinarlo.
+- precio_final debe representar el valor neto de la línea después del descuento.
+- La suma de los descuentos de las líneas debe coincidir con el descuento total cuando sea posible determinarlo.
 
 ==================================================
 IMPUESTOS Y PERCEPCIONES
@@ -349,6 +389,12 @@ subtotal_neto
 
 Puede existir una diferencia mínima por redondeos.
 
+IMPORTANTE:
+Si el precio unitario leído de la columna correspondiente
+no coincide con el subtotal porque existe una bonificación,
+NO corrijas el precio unitario para hacerlo coincidir.
+El precio unitario debe conservar el valor impreso.
+
 ==================================================
 
 IMPORTANTE FINAL
@@ -360,138 +406,65 @@ No agregues texto fuera del JSON.
 Respondé únicamente el JSON solicitado.
 `
 
-  const response =
-    await withRetry(() =>
-      ai.models.generateContent({
-        model: modelo,
-
-        contents: [
-          {
-            role: "user",
-            parts: [
-              {
-                text: prompt,
+  const response = await withRetry(() =>
+    ai.models.generateContent({
+      model: modelo,
+      contents: [
+        {
+          role: "user",
+          parts: [
+            { text: prompt },
+            {
+              inlineData: {
+                mimeType,
+                data: base64,
               },
-              {
-                inlineData: {
-                  mimeType,
-                  data: base64,
-                },
-              },
-            ],
-          },
-        ],
-
-        config: {
-          responseMimeType:
-            "application/json",
-
-          responseSchema:
-            schema,
+            },
+          ],
         },
-      })
-    )
+      ],
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: schema,
+      },
+    })
+  )
 
-  const texto =
-    response.text
+  const texto = response.text
 
   if (!texto) {
-    throw new Error(
-      "Gemini no devolvió contenido"
-    )
+    throw new Error("Gemini no devolvió contenido")
   }
 
-  const data =
-    JSON.parse(texto) as ComprobanteExtraido
+  const data = JSON.parse(texto) as ComprobanteExtraido
 
   return {
-
-    proveedor_nombre:
-      data.proveedor_nombre ?? null,
-
-    numero:
-      data.numero ?? null,
-
-    fecha:
-      data.fecha ?? null,
-
-    fecha_vencimiento:
-      data.fecha_vencimiento ?? null,
-
-    subtotal_bruto:
-      data.subtotal_bruto ?? null,
-
-    descuento_total:
-      data.descuento_total ?? null,
-
-    subtotal_neto:
-      data.subtotal_neto ?? null,
-
-    iva_total:
-      data.iva_total ?? null,
-
-    cargos:
-      (data.cargos ?? []).map((cargo) => ({
-        descripcion:
-          cargo.descripcion,
-
-        importe:
-          Math.abs(
-            Number(cargo.importe ?? 0)
-          ),
-      })),
-
-    total:
-      data.total ?? null,
-
-    lineas:
-      (data.lineas ?? []).map((l) => ({
-
-        descripcion:
-          l.descripcion,
-
-        cantidad:
-          Number(l.cantidad ?? 0),
-
-        precio_unitario:
-          Math.abs(
-            Number(
-              l.precio_unitario ?? 0
-            )
-          ),
-
-        iva:
-          l.iva ?? null,
-
-        descuento:
-          Math.abs(
-            Number(
-              l.descuento ?? 0
-            )
-          ),
-
-        precio_final:
-          l.precio_final ?? null,
-
-        codigo_proveedor:
-          l.codigo_proveedor ?? null,
-
-        producto_id:
-          undefined,
-
-        score:
-          undefined,
-
-        confianza:
-          undefined,
-
-        motivo:
-          undefined,
-
-        fuente:
-          undefined,
-
-      })),
-
+    proveedor_nombre: data.proveedor_nombre ?? null,
+    numero: data.numero ?? null,
+    fecha: data.fecha ?? null,
+    fecha_vencimiento: data.fecha_vencimiento ?? null,
+    subtotal_bruto: data.subtotal_bruto ?? null,
+    descuento_total: data.descuento_total ?? null,
+    subtotal_neto: data.subtotal_neto ?? null,
+    iva_total: data.iva_total ?? null,
+    cargos: (data.cargos ?? []).map((cargo) => ({
+      descripcion: cargo.descripcion,
+      importe: Math.abs(Number(cargo.importe ?? 0)),
+    })),
+    total: data.total ?? null,
+    lineas: (data.lineas ?? []).map((l) => ({
+      descripcion: l.descripcion,
+      cantidad: Number(l.cantidad ?? 0),
+      precio_unitario: Math.abs(Number(l.precio_unitario ?? 0)),
+      iva: l.iva ?? null,
+      descuento: Math.abs(Number(l.descuento ?? 0)),
+      precio_final: l.precio_final ?? null,
+      codigo_proveedor: l.codigo_proveedor ?? null,
+      producto_id: undefined,
+      score: undefined,
+      confianza: undefined,
+      motivo: undefined,
+      fuente: undefined,
+    })),
   }
 }
