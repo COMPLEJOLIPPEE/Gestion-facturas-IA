@@ -5,6 +5,11 @@ import { smartMatch } from "./smartMatch";
 
 export type LineaIA = LineaExtraida;
 
+export type TipoBonificacionProcesada =
+  | "cantidad"
+  | "importe"
+  | "porcentaje";
+
 export type ProductoSistema = {
   id: string;
   nombre: string;
@@ -20,7 +25,7 @@ export type LineaProcesada = {
   bonificacion?: number;
   cantidad_bonificada?: number;
   cantidad_bonificada_detalle?: number;
-  tipo_bonificacion?: "cantidad" | "importe" | "porcentaje";
+  tipo_bonificacion?: TipoBonificacionProcesada;
   precio_bruto_unitario?: number;
   precio_neto?: number;
   subtotal_neto?: number;
@@ -37,6 +42,20 @@ export type LineaProcesada = {
   producto_sugerido_nombre?: string;
 };
 
+function normalizarTipoBonificacion(
+  valor: string | null | undefined
+): TipoBonificacionProcesada | undefined {
+  if (
+    valor === "cantidad" ||
+    valor === "importe" ||
+    valor === "porcentaje"
+  ) {
+    return valor;
+  }
+
+  return undefined;
+}
+
 function datosFinancieros(linea: LineaIA) {
   return {
     bonificacion:
@@ -51,12 +70,9 @@ function datosFinancieros(linea: LineaIA) {
       linea.cantidad_bonificada_detalle != null
         ? Math.max(0, linea.cantidad_bonificada_detalle)
         : undefined,
-    tipo_bonificacion:
-      linea.tipo_bonificacion === "cantidad" ||
-      linea.tipo_bonificacion === "importe" ||
-      linea.tipo_bonificacion === "porcentaje"
-        ? linea.tipo_bonificacion
-        : undefined,
+    tipo_bonificacion: normalizarTipoBonificacion(
+      linea.tipo_bonificacion
+    ),
     precio_bruto_unitario:
       linea.precio_bruto_unitario != null
         ? Math.abs(linea.precio_bruto_unitario)
@@ -110,7 +126,7 @@ export async function procesarLineasIA(
         )
       : null;
 
-    const base = {
+    const base: Omit<LineaProcesada, "producto_id" | "autoMatcheado" | "score" | "confianza" | "motivo" | "fuente" | "producto_sugerido_id" | "producto_sugerido_nombre"> = {
       cantidad: linea.cantidad,
       precio_unitario: Math.abs(linea.precio_unitario),
       iva,
