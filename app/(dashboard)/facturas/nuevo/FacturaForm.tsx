@@ -97,11 +97,6 @@ export function FacturaForm({ proveedores, empresas, productos, formasPago }: Pr
   }
 
   const calculo = useMemo(() => {
-    let subtotalBruto = 0
-    let descuentosTotal = 0
-    let ivaTotal = 0
-    let impuestosInternosTotal = 0
-
     const lineasCalculadas = lineas.map((linea) => {
       const cantidad = numero(linea.cantidad)
       const precioUnitario = Math.abs(numero(linea.precio_unitario))
@@ -113,20 +108,14 @@ export function FacturaForm({ proveedores, empresas, productos, formasPago }: Pr
         cantidad
       )
       const bonificacionPorCantidad = linea.tipo_bonificacion === "cantidad"
-      const importeDespuesBonificacionCantidad = bonificacionPorCantidad
-        ? Math.max(0, (cantidad - cantidadBonificada) * precioUnitario)
-        : bruto
-      const importeDescuentos = descuento + (bonificacionPorCantidad ? 0 : bonificacion)
-      const subtotalNeto = Math.max(0, importeDespuesBonificacionCantidad - importeDescuentos)
+      const bonificacionImporte = bonificacionPorCantidad
+        ? cantidadBonificada * precioUnitario
+        : bonificacion
+      const subtotalNeto = Math.max(0, bruto - descuento - bonificacionImporte)
       const precioNeto = cantidad > 0 ? subtotalNeto / cantidad : 0
       const tasaIVA = numero(linea.iva)
       const ivaImporte = subtotalNeto * (tasaIVA / 100)
       const impuestosInternos = Math.abs(numero(linea.impuestos_internos))
-
-      subtotalBruto += bruto
-      descuentosTotal += importeDescuentos
-      ivaTotal += ivaImporte
-      impuestosInternosTotal += impuestosInternos
 
       return {
         ...linea,
@@ -140,20 +129,32 @@ export function FacturaForm({ proveedores, empresas, productos, formasPago }: Pr
         subtotal_neto: redondear(subtotalNeto),
         iva_importe: redondear(ivaImporte),
         impuestos_internos: redondear(impuestosInternos),
+        _bruto: bruto,
+        _descuentoTotal: descuento + bonificacionImporte,
       }
     })
 
-    const subtotalNeto = Math.max(0, subtotalBruto - descuentosTotal)
+    const resumen = lineasCalculadas.reduce(
+      (acumulado, linea) => ({
+        subtotalBruto: acumulado.subtotalBruto + linea._bruto,
+        descuentos: acumulado.descuentos + linea._descuentoTotal,
+        subtotalNeto: acumulado.subtotalNeto + linea.subtotal_neto,
+        iva: acumulado.iva + linea.iva_importe,
+        impuestosInternos: acumulado.impuestosInternos + linea.impuestos_internos,
+      }),
+      { subtotalBruto: 0, descuentos: 0, subtotalNeto: 0, iva: 0, impuestosInternos: 0 }
+    )
+
     const totalCargos = cargos.reduce((acumulado, cargo) => acumulado + Math.abs(numero(cargo.importe)), 0)
-    const ivaRedondeado = redondear(ivaTotal)
-    const impuestosInternosRedondeados = redondear(impuestosInternosTotal)
-    const totalCalculado = redondear(subtotalNeto + ivaRedondeado + impuestosInternosRedondeados + totalCargos)
+    const ivaRedondeado = redondear(resumen.iva)
+    const impuestosInternosRedondeados = redondear(resumen.impuestosInternos)
+    const totalCalculado = redondear(resumen.subtotalNeto + ivaRedondeado + impuestosInternosRedondeados + totalCargos)
 
     return {
       lineas: lineasCalculadas,
-      subtotalBruto: redondear(subtotalBruto),
-      descuentos: redondear(descuentosTotal),
-      subtotalNeto: redondear(subtotalNeto),
+      subtotalBruto: redondear(resumen.subtotalBruto),
+      descuentos: redondear(resumen.descuentos),
+      subtotalNeto: redondear(resumen.subtotalNeto),
       iva: ivaRedondeado,
       impuestosInternos: impuestosInternosRedondeados,
       totalCargos: redondear(totalCargos),
@@ -270,14 +271,11 @@ export function FacturaForm({ proveedores, empresas, productos, formasPago }: Pr
             <h3 className="text-base font-semibold text-amber-900">⚠️ Gemini no pudo procesar el documento</h3>
             <p className="mt-1 text-sm text-amber-800">{fallbackIA.mensaje}</p>
           </div>
-
           <p className="mb-4 text-sm text-gray-700">Podés intentar procesarlo con <strong>OCR.space</strong> como alternativa.</p>
-
           <div className="flex gap-3">
             <button type="button" onClick={autorizarOCR} disabled={leyendoIA} className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50">
               {leyendoIA ? "Procesando con OCR..." : "Usar OCR.space"}
             </button>
-
             <button type="button" onClick={() => { setFallbackIA(null); setErrorIA(null) }} disabled={leyendoIA} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50">
               Cancelar
             </button>
@@ -285,46 +283,10 @@ export function FacturaForm({ proveedores, empresas, productos, formasPago }: Pr
         </div>
       )}
 
-      <DatosComprobante
-        proveedores={proveedores}
-        empresas={empresas}
-        proveedorId={proveedorId}
-        setProveedorId={setProveedorId}
-        numero={numeroFactura}
-        setNumero={setNumeroFactura}
-        fecha={fecha}
-        setFecha={setFecha}
-        fechaVencimiento={fechaVencimiento}
-        setFechaVencimiento={setFechaVencimiento}
-      />
-
-      <ProductosFactura
-        productos={productosDisponibles}
-        lineas={calculo.lineas}
-        agregarLinea={agregarLinea}
-        quitarLinea={quitarLinea}
-        actualizarLinea={actualizarLinea}
-        actualizarProductoDeLinea={actualizarProductoDeLinea}
-        crearProductoDesdeLinea={crearProductoDesdeLinea}
-      />
-
-      <ImpuestosFactura
-        subtotal={calculo.subtotalNeto}
-        descuentos={calculo.descuentos}
-        iva={calculo.iva}
-        cargos={cargos}
-        total={calculo.total}
-      />
-
-      <PagoFactura
-        pagarAlCargar={pagarAlCargar}
-        setPagarAlCargar={setPagarAlCargar}
-        montoPagoMostrado={montoPagoMostrado}
-        setMontoPago={setMontoPago}
-        setPagoTocado={setPagoTocado}
-        total={calculo.total}
-        formasPago={formasPago}
-      />
+      <DatosComprobante proveedores={proveedores} empresas={empresas} proveedorId={proveedorId} setProveedorId={setProveedorId} numero={numeroFactura} setNumero={setNumeroFactura} fecha={fecha} setFecha={setFecha} fechaVencimiento={fechaVencimiento} setFechaVencimiento={setFechaVencimiento} />
+      <ProductosFactura productos={productosDisponibles} lineas={calculo.lineas} agregarLinea={agregarLinea} quitarLinea={quitarLinea} actualizarLinea={actualizarLinea} actualizarProductoDeLinea={actualizarProductoDeLinea} crearProductoDesdeLinea={crearProductoDesdeLinea} />
+      <ImpuestosFactura subtotal={calculo.subtotalNeto} descuentos={calculo.descuentos} iva={calculo.iva} cargos={cargos} total={calculo.total} />
+      <PagoFactura pagarAlCargar={pagarAlCargar} setPagarAlCargar={setPagarAlCargar} montoPagoMostrado={montoPagoMostrado} setMontoPago={setMontoPago} setPagoTocado={setPagoTocado} total={calculo.total} formasPago={formasPago} />
 
       <button type="submit" disabled={lineas.length === 0} className="rounded-lg bg-black px-5 py-2 text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
         Guardar factura
