@@ -10,26 +10,10 @@ import PagoRemito from "./components/PagoRemito"
 import { leerRemitoConIA } from "@/lib/ai/actions"
 import { matchearProducto } from "@/lib/ai/matchear-producto"
 
-type Proveedor = {
-  id: string
-  nombre_fantasia: string
-}
-
-type Empresa = {
-  id: string
-  razon_social: string
-}
-
-type Producto = {
-  id: string
-  nombre: string
-  codigo: string | null
-}
-
-type FormaPago = {
-  id: string
-  nombre: string
-}
+type Proveedor = { id: string; nombre_fantasia: string }
+type Empresa = { id: string; razon_social: string }
+type Producto = { id: string; nombre: string; codigo: string | null }
+type FormaPago = { id: string; nombre: string }
 
 type Props = {
   proveedores: Proveedor[]
@@ -38,16 +22,12 @@ type Props = {
   formasPago: FormaPago[]
 }
 
-export function RemitoForm({
-  proveedores,
-  empresas,
-  productos,
-  formasPago,
-}: Props) {
+export function RemitoForm({ proveedores, empresas, productos, formasPago }: Props) {
   const [lineas, setLineas] = useState<LineaRemito[]>([])
   const [proveedorId, setProveedorId] = useState("")
   const [numero, setNumero] = useState("")
   const [fecha, setFecha] = useState("")
+  const [fechaVencimiento, setFechaVencimiento] = useState("")
   const [leyendoIA, setLeyendoIA] = useState(false)
   const [errorIA, setErrorIA] = useState<string | null>(null)
   const inputArchivoRef = useRef<HTMLInputElement>(null)
@@ -78,17 +58,13 @@ export function RemitoForm({
     valor: string | number
   ) => {
     setLineas((prev) =>
-      prev.map((linea, i) =>
-        i === index ? { ...linea, [campo]: valor } : linea
-      )
+      prev.map((linea, i) => (i === index ? { ...linea, [campo]: valor } : linea))
     )
   }
 
   const actualizarProductoDeLinea = (index: number, productoId: string) => {
     setLineas((prev) =>
-      prev.map((linea, i) =>
-        i === index ? { ...linea, producto_id: productoId } : linea
-      )
+      prev.map((linea, i) => (i === index ? { ...linea, producto_id: productoId } : linea))
     )
   }
 
@@ -98,13 +74,9 @@ export function RemitoForm({
     let bonificacionTotal = 0
 
     lineas.forEach((linea) => {
-      const bruto = linea.cantidad * linea.precio_unitario
-      const descuento = Number(linea.descuento ?? 0)
-      const bonificacion = Number(linea.bonificacion_importe ?? 0)
-
-      subtotalBruto += bruto
-      descuentoTotal += descuento
-      bonificacionTotal += bonificacion
+      subtotalBruto += linea.cantidad * linea.precio_unitario
+      descuentoTotal += Number(linea.descuento ?? 0)
+      bonificacionTotal += Number(linea.bonificacion_importe ?? 0)
     })
 
     return {
@@ -120,10 +92,7 @@ export function RemitoForm({
   const archivoABase64 = (file: File): Promise<string> =>
     new Promise((resolve, reject) => {
       const reader = new FileReader()
-      reader.onload = () => {
-        const resultado = reader.result as string
-        resolve(resultado.split(",")[1] ?? "")
-      }
+      reader.onload = () => resolve((reader.result as string).split(",")[1] ?? "")
       reader.onerror = reject
       reader.readAsDataURL(file)
     })
@@ -146,6 +115,7 @@ export function RemitoForm({
 
       if (datos.numero) setNumero(datos.numero)
       if (datos.fecha) setFecha(datos.fecha)
+      if (datos.fecha_vencimiento) setFechaVencimiento(datos.fecha_vencimiento)
 
       if (datos.lineas.length > 0) {
         setLineas(
@@ -153,14 +123,8 @@ export function RemitoForm({
             const match = matchearProducto(l.descripcion, productos)
             const bruto = Number(l.cantidad || 1) * Number(l.precio_unitario || 0)
             const descuento = Number(l.descuento ?? 0)
-            const precioNeto = Math.max(
-              0,
-              Number(l.precio_final ?? bruto - descuento)
-            )
-            const bonificacionImporte = Math.max(
-              0,
-              bruto - descuento - precioNeto
-            )
+            const precioNeto = Math.max(0, Number(l.precio_final ?? bruto - descuento))
+            const bonificacionImporte = Math.max(0, bruto - descuento - precioNeto)
 
             return {
               producto_id: match?.id ?? "",
@@ -179,9 +143,7 @@ export function RemitoForm({
         )
       }
     } catch (error) {
-      setErrorIA(
-        error instanceof Error ? error.message : "No se pudo leer el comprobante."
-      )
+      setErrorIA(error instanceof Error ? error.message : "No se pudo leer el comprobante.")
     } finally {
       setLeyendoIA(false)
       if (inputArchivoRef.current) inputArchivoRef.current.value = ""
@@ -212,6 +174,8 @@ export function RemitoForm({
         setNumero={setNumero}
         fecha={fecha}
         setFecha={setFecha}
+        fechaVencimiento={fechaVencimiento}
+        setFechaVencimiento={setFechaVencimiento}
       />
 
       <ProductosRemito
