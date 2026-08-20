@@ -29,6 +29,7 @@ function numero(valor: unknown) {
   const resultado = Number(valor ?? 0)
   return Number.isFinite(resultado) ? resultado : 0
 }
+
 function redondear(valor: number) { return Number(valor.toFixed(2)) }
 
 export async function crearFactura(formData: FormData) {
@@ -92,9 +93,7 @@ export async function crearFactura(formData: FormData) {
     }
   })
 
-  // Supabase ya contiene estas columnas, pero database.types.ts local estaba desactualizado.
-  // El cast evita que el tipado antiguo descarte campos que existen realmente en factura_items.
-  const { error: errorItems } = await supabase.from("factura_items").insert(itemsParaGuardar as any)
+  const { error: errorItems } = await supabase.from("factura_items").insert(itemsParaGuardar as never[])
   if (errorItems) {
     const { error: rollback } = await supabase.from("facturas").delete().eq("id", factura.id)
     if (rollback) throw new Error(`Error guardando items: ${errorItems.message}. No se pudo eliminar la factura incompleta: ${rollback.message}`)
@@ -128,7 +127,6 @@ export async function crearProductoDesdeFactura(formData: FormData) {
   const supabase = await createClient()
   const nombre = String(formData.get("nombre") ?? "").trim()
   const costo = Number(formData.get("costo") ?? 0)
-  const iva = Number(formData.get("iva") ?? 21)
   if (!nombre) return { ok: false, error: "El nombre del producto es obligatorio." }
 
   const { data: existente } = await supabase.from("productos").select("id, nombre, codigo").ilike("nombre", nombre).maybeSingle()
