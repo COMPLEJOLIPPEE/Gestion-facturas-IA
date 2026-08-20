@@ -26,21 +26,36 @@ export default async function RemitoDetallePage({ params }: Props) {
     .eq("id", id)
     .single()
 
-  if (error || !remito) {
-    notFound()
-  }
+  if (error || !remito) notFound()
 
-  const proveedor = Array.isArray(remito.proveedores) ? remito.proveedores[0] : remito.proveedores
-  const empresa = Array.isArray(remito.empresas) ? remito.empresas[0] : remito.empresas
+  const proveedor = Array.isArray(remito.proveedores)
+    ? remito.proveedores[0]
+    : remito.proveedores
+  const empresa = Array.isArray(remito.empresas)
+    ? remito.empresas[0]
+    : remito.empresas
 
   const { data: items } = await supabase
     .from("remito_items")
-    .select(`id, cantidad, precio_unitario, productos (nombre, codigo, unidad_medida)`)
+    .select(`
+      id,
+      cantidad,
+      precio_unitario,
+      descuento_importe,
+      bonificacion_importe,
+      precio_neto_unitario,
+      subtotal_neto,
+      bonificacion_tipo,
+      cantidad_bonificada,
+      productos (nombre, codigo, unidad_medida)
+    `)
     .eq("remito_id", id)
 
   const itemsNormalizados = (items ?? []).map((item) => ({
     ...item,
-    productos: Array.isArray(item.productos) ? item.productos[0] ?? null : item.productos,
+    productos: Array.isArray(item.productos)
+      ? item.productos[0] ?? null
+      : item.productos,
   }))
 
   const [{ data: pagos }, { data: formasPago }] = await Promise.all([
@@ -52,166 +67,169 @@ export default async function RemitoDetallePage({ params }: Props) {
     supabase.from("formas_pago").select("id, nombre").order("nombre"),
   ])
 
-  const totalPagado = (pagos ?? []).reduce((acc, p) => acc + Number(p.monto ?? 0), 0)
-  const saldoPendiente = Math.max(Number(remito.monto_total ?? 0) - totalPagado, 0)
+  const totalPagado = (pagos ?? []).reduce(
+    (acc, p) => acc + Number(p.monto ?? 0),
+    0
+  )
+  const saldoPendiente = Math.max(
+    Number(remito.monto_total ?? 0) - totalPagado,
+    0
+  )
   const registrarPago = registrarPagoRemito.bind(null, remito.id)
 
   return (
-    <div>
-<div className="mb-6 flex items-start justify-between">
+    <div className="space-y-6">
+      <div className="flex items-start justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">📦 Comprobante de compra</h1>
+          <p className="mt-2 text-lg font-medium">
+            {remito.numero ?? "Sin número"}
+          </p>
+          <p className="text-gray-600">
+            {proveedor?.nombre_fantasia ?? "Sin proveedor"}
+          </p>
+          <p className="text-sm text-gray-500">
+            {empresa?.razon_social ?? "Sin empresa"} · {formatDateAR(remito.fecha)}
+          </p>
+        </div>
 
-  <div>
+        <div className="rounded-lg bg-gray-100 px-4 py-2">
+          <p className="text-xs uppercase tracking-wide text-gray-500">Estado</p>
+          <p className="font-semibold">
+            {saldoPendiente === 0
+              ? "🟢 Pagado"
+              : totalPagado > 0
+                ? "🟡 Pago parcial"
+                : "⚪ Pendiente"}
+          </p>
+        </div>
+      </div>
 
-    <h1 className="text-3xl font-bold">
-      📦 Comprobante de compra
-    </h1>
+      <div className="rounded-xl bg-white p-6 shadow">
+        <div className="mb-5">
+          <h2 className="text-xl font-semibold">📦 Productos</h2>
+          <p className="mt-1 text-sm text-gray-500">
+            Los remitos no incluyen IVA ni impuestos. Los descuentos y bonificaciones
+            reducen directamente el importe neto de la línea.
+          </p>
+        </div>
 
-    <p className="mt-2 text-lg font-medium">
-      {remito.numero ?? "Sin número"}
-    </p>
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[900px]">
+            <thead>
+              <tr className="border-b text-left text-sm text-gray-500">
+                <th className="pb-3">Código</th>
+                <th className="pb-3">Producto</th>
+                <th className="pb-3">Unidad</th>
+                <th className="pb-3 text-right">Cantidad</th>
+                <th className="pb-3 text-right">Precio Unit.</th>
+                <th className="pb-3 text-right">Desc. / Bonif.</th>
+                <th className="pb-3 text-right">Precio Neto</th>
+                <th className="pb-3 text-right">Subtotal</th>
+              </tr>
+            </thead>
+            <tbody>
+              {itemsNormalizados.map((item) => {
+                const bruto =
+                  Number(item.cantidad ?? 0) * Number(item.precio_unitario ?? 0)
+                const descuento = Number(item.descuento_importe ?? 0)
+                const bonificacion = Number(item.bonificacion_importe ?? 0)
+                const neto = Number(item.subtotal_neto ?? Math.max(0, bruto - descuento - bonificacion))
 
-    <p className="text-gray-600">
-      {proveedor?.nombre_fantasia ?? "Sin proveedor"}
-    </p>
+                return (
+                  <tr key={item.id} className="border-b last:border-0">
+                    <td className="py-3">{item.productos?.codigo ?? "—"}</td>
+                    <td className="py-3 font-medium">{item.productos?.nombre ?? "—"}</td>
+                    <td className="py-3">{item.productos?.unidad_medida ?? "—"}</td>
+                    <td className="py-3 text-right">{item.cantidad}</td>
+                    <td className="py-3 text-right">
+                      ${Number(item.precio_unitario).toLocaleString("es-AR")}
+                    </td>
+                    <td className="py-3 text-right">
+                      {descuento > 0 && (
+                        <div className="text-red-600">-${descuento.toLocaleString("es-AR")}</div>
+                      )}
+                      {bonificacion > 0 && (
+                        <div className="text-blue-600">
+                          Bonif. -${bonificacion.toLocaleString("es-AR")}
+                        </div>
+                      )}
+                      {item.cantidad_bonificada && (
+                        <div className="text-xs text-blue-600">
+                          {item.cantidad_bonificada} bonificada(s)
+                        </div>
+                      )}
+                      {descuento === 0 && bonificacion === 0 && "—"}
+                    </td>
+                    <td className="py-3 text-right font-medium">
+                      ${Number(item.precio_neto_unitario ?? 0).toLocaleString("es-AR")}
+                    </td>
+                    <td className="py-3 text-right font-semibold">
+                      ${neto.toLocaleString("es-AR")}
+                    </td>
+                  </tr>
+                )
+              })}
+            </tbody>
+          </table>
+        </div>
+      </div>
 
-  </div>
-
-  <div className="rounded-lg bg-gray-100 px-4 py-2">
-
-    <p className="text-xs uppercase tracking-wide text-gray-500">
-      Estado
-    </p>
-
-    <p className="font-semibold">
-      {saldoPendiente === 0
-        ? "🟢 Pagado"
-        : totalPagado > 0
-        ? "🟡 Pago parcial"
-        : "⚪ Pendiente"}
-    </p>
-
-  </div>
-
-</div>
-
-        <div className="rounded-xl bg-white p-6 shadow">
-
-  <h2 className="mb-5 text-xl font-semibold">
-    📦 Productos
-  </h2>
-
-  <div className="overflow-x-auto">
-
-    <table className="w-full">
-
-      <thead>
-
-        <tr className="border-b text-left text-sm text-gray-500">
-
-          <th className="pb-3">Código</th>
-
-          <th className="pb-3">Producto</th>
-
-          <th className="pb-3">Unidad</th>
-
-          <th className="pb-3 text-right">
-            Cantidad
-          </th>
-
-          <th className="pb-3 text-right">
-            Precio Unit.
-          </th>
-
-          <th className="pb-3 text-right">
-            Subtotal
-          </th>
-
-        </tr>
-
-      </thead>
-
-      <tbody>
-
-        {itemsNormalizados.map((item) => {
-
-          const subtotal =
-            Number(item.cantidad) *
-            Number(item.precio_unitario);
-
-          return (
-
-            <tr
-              key={item.id}
-              className="border-b last:border-0"
-            >
-
-              <td className="py-3">
-                {item.productos?.codigo ?? "—"}
-              </td>
-
-              <td className="py-3 font-medium">
-                {item.productos?.nombre ?? "—"}
-              </td>
-
-              <td className="py-3">
-                {item.productos?.unidad_medida ?? "—"}
-              </td>
-
-              <td className="py-3 text-right">
-                {item.cantidad}
-              </td>
-
-              <td className="py-3 text-right">
-                $
-                {Number(
-                  item.precio_unitario
-                ).toLocaleString("es-AR")}
-              </td>
-
-              <td className="py-3 text-right font-medium">
-                $
-                {subtotal.toLocaleString(
-                  "es-AR"
-                )}
-              </td>
-
-            </tr>
-
-          );
-
-        })}
-
-      </tbody>
-
-    </table>
-
-  </div>
-
-</div>
-
-        <div className="flex justify-end border-t p-4">
-          <div className="w-64 text-sm">
-            <div className="flex justify-between font-semibold">
-              <span>Total</span>
-              <span>${Number(remito.monto_total ?? 0).toLocaleString("es-AR")}</span>
-            </div>
+      <div className="flex justify-end border-t p-4">
+        <div className="w-80 text-sm">
+          <div className="flex justify-between">
+            <span>Total bruto</span>
+            <span>
+              ${itemsNormalizados
+                .reduce(
+                  (sum, item) =>
+                    sum + Number(item.cantidad ?? 0) * Number(item.precio_unitario ?? 0),
+                  0
+                )
+                .toLocaleString("es-AR")}
+            </span>
+          </div>
+          <div className="flex justify-between text-red-600">
+            <span>Descuentos</span>
+            <span>
+              -${itemsNormalizados
+                .reduce((sum, item) => sum + Number(item.descuento_importe ?? 0), 0)
+                .toLocaleString("es-AR")}
+            </span>
+          </div>
+          <div className="flex justify-between text-blue-600">
+            <span>Bonificaciones</span>
+            <span>
+              -${itemsNormalizados
+                .reduce((sum, item) => sum + Number(item.bonificacion_importe ?? 0), 0)
+                .toLocaleString("es-AR")}
+            </span>
+          </div>
+          <div className="mt-2 flex justify-between border-t pt-2 text-base font-bold">
+            <span>Total</span>
+            <span>${Number(remito.monto_total ?? 0).toLocaleString("es-AR")}</span>
           </div>
         </div>
+      </div>
 
-      <div className="mb-6 grid gap-4 md:grid-cols-3">
+      <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-lg bg-gray-50 p-4">
           <p className="text-sm text-gray-500">Total del comprobante</p>
-          <p className="mt-1 text-xl font-bold">${Number(remito.monto_total ?? 0).toLocaleString("es-AR")}</p>
+          <p className="mt-1 text-xl font-bold">
+            ${Number(remito.monto_total ?? 0).toLocaleString("es-AR")}
+          </p>
         </div>
-
         <div className="rounded-lg bg-green-50 p-4">
           <p className="text-sm text-gray-500">Total pagado</p>
-          <p className="mt-1 text-xl font-bold text-green-700">${totalPagado.toLocaleString("es-AR")}</p>
+          <p className="mt-1 text-xl font-bold text-green-700">
+            ${totalPagado.toLocaleString("es-AR")}
+          </p>
         </div>
-
         <div className="rounded-lg bg-amber-50 p-4">
           <p className="text-sm text-gray-500">Saldo pendiente</p>
-          <p className="mt-1 text-xl font-bold text-amber-700">${saldoPendiente.toLocaleString("es-AR")}</p>
+          <p className="mt-1 text-xl font-bold text-amber-700">
+            ${saldoPendiente.toLocaleString("es-AR")}
+          </p>
         </div>
       </div>
 
@@ -249,8 +267,3 @@ export default async function RemitoDetallePage({ params }: Props) {
     </div>
   )
 }
-{/* Próximamente:
-    Documento original
-    Observaciones
-    IA
-*/}
