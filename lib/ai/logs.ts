@@ -1,6 +1,6 @@
 import { createClient } from "@/lib/supabase/server"
 
-export type IAProveedor = "Gemini" | "OCR.space"
+export type IAProveedor = "Gemini" | "GPT-4o-mini"
 
 export type IAEstado =
   | "procesando"
@@ -34,11 +34,7 @@ export async function crearLogIA({
     .single()
 
   if (error) {
-    console.error(
-      "Error creando log de IA:",
-      error
-    )
-
+    console.error("Error creando log de IA:", error)
     return null
   }
 
@@ -77,9 +73,6 @@ export async function actualizarLogIA({
     .eq("id", logId)
 
   if (error) {
-    console.error(
-      "Error actualizando log de IA:",
-      error
-    )
+    console.error("Error actualizando log de IA:", error)
   }
 }
