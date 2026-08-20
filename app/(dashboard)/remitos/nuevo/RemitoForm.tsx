@@ -7,7 +7,7 @@ import CargaIA from "./components/CargaIA"
 import DatosComprobante from "./components/DatosComprobante"
 import ProductosRemito, { LineaRemito } from "./components/ProductosRemito"
 import PagoRemito from "./components/PagoRemito"
-import { leerRemitoConIA } from "@/lib/ai/actions"
+import { leerRemitoConIA, usarGPTParaRemito } from "@/lib/ai/actions"
 import { matchearProducto } from "@/lib/ai/matchear-producto"
 
 type Proveedor = { id: string; nombre_fantasia: string }
@@ -30,6 +30,7 @@ export function RemitoForm({ proveedores, empresas, productos, formasPago }: Pro
   const [fechaVencimiento, setFechaVencimiento] = useState("")
   const [leyendoIA, setLeyendoIA] = useState(false)
   const [errorIA, setErrorIA] = useState<string | null>(null)
+  const [fallbackIA, setFallbackIA] = useState<{ base64: string; mimeType: string; logId: string | null; mensaje: string } | null>(null)
   const inputArchivoRef = useRef<HTMLInputElement>(null)
   const [pagarAlCargar, setPagarAlCargar] = useState(false)
   const [montoPago, setMontoPago] = useState(0)
@@ -100,53 +101,98 @@ export function RemitoForm({ proveedores, empresas, productos, formasPago }: Pro
   async function manejarArchivoIA(file: File) {
     setLeyendoIA(true)
     setErrorIA(null)
+    setFallbackIA(null)
 
     try {
       const base64 = await archivoABase64(file)
       const datos = await leerRemitoConIA(base64, file.type)
-
-      if (datos.proveedor_nombre) {
-        const proveedor = matchearProducto(
-          datos.proveedor_nombre,
-          proveedores.map((p) => ({ id: p.id, nombre: p.nombre_fantasia }))
-        )
-        if (proveedor) setProveedorId(proveedor.id)
-      }
-
-      if (datos.numero) setNumero(datos.numero)
-      if (datos.fecha) setFecha(datos.fecha)
-      if (datos.fecha_vencimiento) setFechaVencimiento(datos.fecha_vencimiento)
-
-      if (datos.lineas.length > 0) {
-        setLineas(
-          datos.lineas.map((l) => {
-            const match = matchearProducto(l.descripcion, productos)
-            const bruto = Number(l.cantidad || 1) * Number(l.precio_unitario || 0)
-            const descuento = Number(l.descuento ?? 0)
-            const precioNeto = Math.max(0, Number(l.precio_final ?? bruto - descuento))
-            const bonificacionImporte = Math.max(0, bruto - descuento - precioNeto)
-
-            return {
-              producto_id: match?.id ?? "",
-              cantidad: l.cantidad || 1,
-              precio_unitario: l.precio_unitario || 0,
-              descuento,
-              bonificacion_importe: bonificacionImporte,
-              porcentaje_descuento: l.porcentaje_descuento ?? null,
-              bonificacion_tipo: l.grupo_descuento ?? null,
-              cantidad_bonificada: null,
-              descripcionLeida: l.descripcion,
-              autoMatcheado: Boolean(match),
-              precio_final: precioNeto,
-            }
-          })
-        )
-      }
+      aplicarDatosRemitoIA(datos)
     } catch (error) {
-      setErrorIA(error instanceof Error ? error.message : "No se pudo leer el comprobante.")
+      const mensaje = error instanceof Error ? error.message : "No se pudo leer el comprobante."
+
+      if (mensaje.startsWith("GEMINI_FALLBACK_REQUIRED|")) {
+        const partes = mensaje.split("|")
+        const logId = partes[1] || null
+        const motivo = partes.slice(2).join("|") || "Gemini no pudo procesar el documento."
+
+        try {
+          const base64 = await archivoABase64(file)
+          setFallbackIA({ base64, mimeType: file.type, logId, mensaje: motivo })
+          setErrorIA(null)
+        } catch {
+          setErrorIA("No se pudo preparar el documento para el procesamiento alternativo.")
+        }
+      } else {
+        setErrorIA(mensaje)
+      }
     } finally {
       setLeyendoIA(false)
       if (inputArchivoRef.current) inputArchivoRef.current.value = ""
+    }
+  }
+
+  function aplicarDatosRemitoIA(datos: Awaited<ReturnType<typeof leerRemitoConIA>>) {
+    if (datos.proveedor_nombre) {
+      const proveedor = matchearProducto(
+        datos.proveedor_nombre,
+        proveedores.map((p) => ({ id: p.id, nombre: p.nombre_fantasia }))
+      )
+      if (proveedor) setProveedorId(proveedor.id)
+    }
+
+    if (datos.numero) setNumero(datos.numero)
+    if (datos.fecha) setFecha(datos.fecha)
+    if (datos.fecha_vencimiento) setFechaVencimiento(datos.fecha_vencimiento)
+
+    if (datos.lineas.length > 0) {
+      setLineas(
+        datos.lineas.map((l) => {
+          const match = matchearProducto(l.descripcion, productos)
+          const bruto = Number(l.cantidad || 1) * Number(l.precio_unitario || 0)
+          const descuento = Number(l.descuento ?? 0)
+          const precioNeto = Math.max(0, Number(l.precio_final ?? bruto - descuento))
+          const bonificacionImporte = Math.max(0, bruto - descuento - precioNeto)
+
+          return {
+            producto_id: match?.id ?? "",
+            cantidad: l.cantidad || 1,
+            precio_unitario: l.precio_unitario || 0,
+            descuento,
+            bonificacion_importe: bonificacionImporte,
+            porcentaje_descuento: l.porcentaje_descuento ?? null,
+            bonificacion_tipo: l.grupo_descuento ?? null,
+            cantidad_bonificada: null,
+            descripcionLeida: l.descripcion,
+            autoMatcheado: Boolean(match),
+            precio_final: precioNeto,
+          }
+        })
+      )
+    }
+  }
+
+  async function autorizarGPT() {
+    if (!fallbackIA) return
+
+    setLeyendoIA(true)
+    setErrorIA(null)
+
+    try {
+      const datos = await usarGPTParaRemito(
+        fallbackIA.base64,
+        fallbackIA.mimeType,
+        fallbackIA.logId
+      )
+      aplicarDatosRemitoIA(datos)
+      setFallbackIA(null)
+    } catch (error) {
+      setErrorIA(
+        error instanceof Error
+          ? error.message
+          : "No se pudo procesar el documento con GPT-4o-mini."
+      )
+    } finally {
+      setLeyendoIA(false)
     }
   }
 
@@ -164,6 +210,24 @@ export function RemitoForm({ proveedores, empresas, productos, formasPago }: Pro
         errorIA={errorIA}
         manejarArchivoIA={manejarArchivoIA}
       />
+
+      {fallbackIA && (
+        <div className="rounded-xl border border-amber-300 bg-amber-50 p-5">
+          <div className="mb-3">
+            <h3 className="text-base font-semibold text-amber-900">⚠️ Gemini no pudo procesar el documento</h3>
+            <p className="mt-1 text-sm text-amber-800">{fallbackIA.mensaje}</p>
+          </div>
+          <p className="mb-4 text-sm text-gray-700">Podés intentar procesarlo con <strong>GPT-4o-mini</strong> como alternativa.</p>
+          <div className="flex gap-3">
+            <button type="button" onClick={autorizarGPT} disabled={leyendoIA} className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50">
+              {leyendoIA ? "Procesando con GPT..." : "Usar GPT-4o-mini"}
+            </button>
+            <button type="button" onClick={() => { setFallbackIA(null); setErrorIA(null) }} disabled={leyendoIA} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50">
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
 
       <DatosComprobante
         proveedores={proveedores}
