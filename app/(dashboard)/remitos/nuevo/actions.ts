@@ -66,26 +66,30 @@ export async function crearRemito(formData: FormData) {
     throw new Error(`Error creando remito: ${errorRemito?.message}`)
   }
 
-  const { error: errorItems } = await supabase.from("remito_items").insert(
-    itemsProcesados.map((item) => ({
-      remito_id: remito.id,
-      producto_id: item.producto_id,
-      cantidad: item.cantidad,
-      precio_unitario: item.precio_unitario,
-      descuento: item.descuento_importe,
-      precio_final: item.precio_final,
-      precio_bruto_unitario: item.precio_bruto_unitario,
-      descuento_importe: item.descuento_importe,
-      bonificacion_importe: item.bonificacion_importe,
-      precio_neto_unitario: item.precio_neto_unitario,
-      subtotal_neto: item.subtotal_neto,
-      descuentos_detalle: item.porcentaje_descuento
-        ? { porcentaje: item.porcentaje_descuento }
-        : null,
-      bonificacion_tipo: item.bonificacion_tipo ?? null,
-      cantidad_bonificada: item.cantidad_bonificada ?? null,
-    }))
-  )
+  const itemsParaGuardar = itemsProcesados.map((item) => ({
+    remito_id: remito.id,
+    producto_id: item.producto_id,
+    cantidad: item.cantidad,
+    precio_unitario: item.precio_unitario,
+    descuento: item.descuento_importe,
+    precio_final: item.precio_final,
+    precio_bruto_unitario: item.precio_bruto_unitario,
+    descuento_importe: item.descuento_importe,
+    bonificacion_importe: item.bonificacion_importe,
+    precio_neto_unitario: item.precio_neto_unitario,
+    subtotal_neto: item.subtotal_neto,
+    descuentos_detalle: item.porcentaje_descuento
+      ? { porcentaje: item.porcentaje_descuento }
+      : null,
+    bonificacion_tipo: item.bonificacion_tipo ?? null,
+    cantidad_bonificada: item.cantidad_bonificada ?? null,
+  }))
+
+  // Las columnas nuevas de remito_items todavía no están reflejadas en
+  // lib/database.types.ts; la estructura ya fue creada en Supabase.
+  const { error: errorItems } = await supabase
+    .from("remito_items")
+    .insert(itemsParaGuardar as never)
 
   if (errorItems) {
     throw new Error(`Error guardando items: ${errorItems.message}`)
