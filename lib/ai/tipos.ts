@@ -21,16 +21,24 @@ export type LineaExtraida = {
     descripcion?: string | null
   }[]
 
-  // Bonificación comercial: importe bonificado o equivalente monetario.
+  // Bonificaciones comerciales
   bonificacion?: number | null
   bonificacion_importe?: number | null
   bonificacion_tipo?: string | null
+  tipo_bonificacion?: string | null
   cantidad_bonificada?: number | null
+  cantidad_bonificada_detalle?: number | null
 
+  // Precios y subtotales
   precio_bruto_unitario?: number | null
+  precio_neto?: number | null
   precio_neto_unitario?: number | null
   subtotal_neto?: number | null
   precio_final?: number | null
+
+  // Impuestos
+  iva_importe?: number | null
+  impuestos_internos?: number | null
 
   grupo_descuento?: string | null
   aplica_a_descripciones?: string[]
