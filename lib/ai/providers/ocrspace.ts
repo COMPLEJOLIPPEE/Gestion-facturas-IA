@@ -9,18 +9,14 @@ const OCRSPACE_API_KEY =
 function parseFactura(
   texto: string
 ): Partial<ComprobanteExtraido> {
-
-  // Número de factura
   const numeroMatch = texto.match(
     /(Factura\s*(Nº|No|Número)?\s*[:\-]?\s*\d{4}[- ]?\d+)/i
   )
 
-  // Fecha
   const fechaMatch = texto.match(
     /(\d{2}[\/\-]\d{2}[\/\-]\d{4}|\d{4}[\/\-]\d{2}[\/\-]\d{2})/
   )
 
-  // Total
   const totalMatch = texto.match(
     /Total\s*[:\-]?\s*\$?\s*([\d.,]+)/i
   )
@@ -47,7 +43,6 @@ export async function extraerConOCRSpace(
   mimeType: string,
   tipo: TipoComprobanteIA
 ): Promise<ComprobanteExtraido> {
-
   void tipo
 
   const formData = new FormData()
@@ -96,6 +91,12 @@ export async function extraerConOCRSpace(
   const parsed =
     parseFactura(textoPlano)
 
+  // OCR.space devuelve texto plano. No debemos convertir
+  // todo ese texto en una falsa línea de producto porque
+  // terminaría apareciendo como un producto no reconocido.
+  // Si OCR no logra estructurar las líneas, devolvemos
+  // el comprobante sin líneas para que la interfaz informe
+  // que el documento necesita revisión.
   return {
     proveedor_nombre: null,
 
@@ -126,17 +127,6 @@ export async function extraerConOCRSpace(
     total:
       parsed.total ?? null,
 
-    lineas: [
-      {
-        descripcion:
-          textoPlano,
-
-        cantidad: 1,
-
-        precio_unitario: 0,
-
-        iva: null,
-      },
-    ],
+    lineas: [],
   }
 }
