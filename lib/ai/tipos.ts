@@ -21,7 +21,8 @@ export type LineaExtraida = {
     descripcion?: string | null
   }[]
 
-  // Bonificación comercial: 3x2, 5x4, unidades bonificadas, etc.
+  // Bonificación comercial: importe bonificado o equivalente monetario.
+  bonificacion?: number | null
   bonificacion_importe?: number | null
   bonificacion_tipo?: string | null
   cantidad_bonificada?: number | null
