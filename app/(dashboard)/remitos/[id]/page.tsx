@@ -8,6 +8,12 @@ type Props = {
   params: Promise<{ id: string }>
 }
 
+type ProductoRelacionado = {
+  nombre: string | null
+  codigo: string | null
+  unidad_medida: string | null
+}
+
 type RemitoItem = {
   id: string
   cantidad: number | null
@@ -18,10 +24,11 @@ type RemitoItem = {
   subtotal_neto: number | null
   bonificacion_tipo: string | null
   cantidad_bonificada: number | null
-  productos:
-    | { nombre: string | null; codigo: string | null; unidad_medida: string | null }
-    | { nombre: string | null; codigo: string | null; unidad_medida: string | null }[]
-    | null
+  productos: ProductoRelacionado | ProductoRelacionado[] | null
+}
+
+function normalizarProducto(producto: RemitoItem["productos"]): ProductoRelacionado | null {
+  return Array.isArray(producto) ? producto[0] ?? null : producto ?? null
 }
 
 export default async function RemitoDetallePage({ params }: Props) {
@@ -44,12 +51,8 @@ export default async function RemitoDetallePage({ params }: Props) {
 
   if (error || !remito) notFound()
 
-  const proveedor = Array.isArray(remito.proveedores)
-    ? remito.proveedores[0]
-    : remito.proveedores
-  const empresa = Array.isArray(remito.empresas)
-    ? remito.empresas[0]
-    : remito.empresas
+  const proveedor = Array.isArray(remito.proveedores) ? remito.proveedores[0] : remito.proveedores
+  const empresa = Array.isArray(remito.empresas) ? remito.empresas[0] : remito.empresas
 
   const { data: items } = await supabase
     .from("remito_items")
@@ -67,9 +70,7 @@ export default async function RemitoDetallePage({ params }: Props) {
     `)
     .eq("remito_id", id)
 
-  const itemsNormalizados: Array<Omit<RemitoItem, "productos"> & { productos: RemitoItem["productos"] }> = (
-    (items ?? []) as unknown as RemitoItem[]
-  ).map((item) => ({
+  const itemsNormalizados: RemitoItem[] = ((items ?? []) as unknown as RemitoItem[]).map((item) => ({
     id: item.id,
     cantidad: item.cantidad,
     precio_unitario: item.precio_unitario,
@@ -79,9 +80,7 @@ export default async function RemitoDetallePage({ params }: Props) {
     subtotal_neto: item.subtotal_neto,
     bonificacion_tipo: item.bonificacion_tipo,
     cantidad_bonificada: item.cantidad_bonificada,
-    productos: Array.isArray(item.productos)
-      ? item.productos[0] ?? null
-      : item.productos ?? null,
+    productos: item.productos,
   }))
 
   const [{ data: pagos }, { data: formasPago }] = await Promise.all([
@@ -93,14 +92,8 @@ export default async function RemitoDetallePage({ params }: Props) {
     supabase.from("formas_pago").select("id, nombre").order("nombre"),
   ])
 
-  const totalPagado = (pagos ?? []).reduce(
-    (acc, p) => acc + Number(p.monto ?? 0),
-    0
-  )
-  const saldoPendiente = Math.max(
-    Number(remito.monto_total ?? 0) - totalPagado,
-    0
-  )
+  const totalPagado = (pagos ?? []).reduce((acc, p) => acc + Number(p.monto ?? 0), 0)
+  const saldoPendiente = Math.max(Number(remito.monto_total ?? 0) - totalPagado, 0)
   const registrarPago = registrarPagoRemito.bind(null, remito.id)
 
   return (
@@ -118,11 +111,7 @@ export default async function RemitoDetallePage({ params }: Props) {
         <div className="rounded-lg bg-gray-100 px-4 py-2">
           <p className="text-xs uppercase tracking-wide text-gray-500">Estado</p>
           <p className="font-semibold">
-            {saldoPendiente === 0
-              ? "🟢 Pagado"
-              : totalPagado > 0
-                ? "🟡 Pago parcial"
-                : "⚪ Pendiente"}
+            {saldoPendiente === 0 ? "🟢 Pagado" : totalPagado > 0 ? "🟡 Pago parcial" : "⚪ Pendiente"}
           </p>
         </div>
       </div>
@@ -151,35 +140,26 @@ export default async function RemitoDetallePage({ params }: Props) {
             </thead>
             <tbody>
               {itemsNormalizados.map((item) => {
+                const producto = normalizarProducto(item.productos)
                 const bruto = Number(item.cantidad ?? 0) * Number(item.precio_unitario ?? 0)
                 const descuento = Number(item.descuento_importe ?? 0)
                 const bonificacion = Number(item.bonificacion_importe ?? 0)
-                const neto = Number(
-                  item.subtotal_neto ?? Math.max(0, bruto - descuento - bonificacion)
-                )
+                const neto = Number(item.subtotal_neto ?? Math.max(0, bruto - descuento - bonificacion))
 
                 return (
                   <tr key={item.id} className="border-b last:border-0">
-                    <td className="py-3">{item.productos?.codigo ?? "—"}</td>
-                    <td className="py-3 font-medium">{item.productos?.nombre ?? "—"}</td>
-                    <td className="py-3">{item.productos?.unidad_medida ?? "—"}</td>
+                    <td className="py-3">{producto?.codigo ?? "—"}</td>
+                    <td className="py-3 font-medium">{producto?.nombre ?? "—"}</td>
+                    <td className="py-3">{producto?.unidad_medida ?? "—"}</td>
                     <td className="py-3 text-right">{item.cantidad}</td>
-                    <td className="py-3 text-right">
-                      ${Number(item.precio_unitario ?? 0).toLocaleString("es-AR")}
-                    </td>
+                    <td className="py-3 text-right">${Number(item.precio_unitario ?? 0).toLocaleString("es-AR")}</td>
                     <td className="py-3 text-right">
                       {descuento > 0 && <div className="text-red-600">-${descuento.toLocaleString("es-AR")}</div>}
-                      {bonificacion > 0 && (
-                        <div className="text-blue-600">Bonif. -${bonificacion.toLocaleString("es-AR")}</div>
-                      )}
-                      {item.cantidad_bonificada && (
-                        <div className="text-xs text-blue-600">{item.cantidad_bonificada} bonificada(s)</div>
-                      )}
-                      {descuento === 0 && bonificacion === 0 && "—"}
+                      {bonificacion > 0 && <div className="text-blue-600">Bonif. -${bonificacion.toLocaleString("es-AR")}</div>}
+                      {item.cantidad_bonificada ? <div className="text-xs text-blue-600">{item.cantidad_bonificada} bonificada(s)</div> : null}
+                      {descuento === 0 && bonificacion === 0 && !item.cantidad_bonificada && "—"}
                     </td>
-                    <td className="py-3 text-right font-medium">
-                      ${Number(item.precio_neto_unitario ?? 0).toLocaleString("es-AR")}
-                    </td>
+                    <td className="py-3 text-right font-medium">${Number(item.precio_neto_unitario ?? 0).toLocaleString("es-AR")}</td>
                     <td className="py-3 text-right font-semibold">${neto.toLocaleString("es-AR")}</td>
                   </tr>
                 )
@@ -193,27 +173,15 @@ export default async function RemitoDetallePage({ params }: Props) {
         <div className="w-80 text-sm">
           <div className="flex justify-between">
             <span>Total bruto</span>
-            <span>
-              ${itemsNormalizados
-                .reduce((sum, item) => sum + Number(item.cantidad ?? 0) * Number(item.precio_unitario ?? 0), 0)
-                .toLocaleString("es-AR")}
-            </span>
+            <span>${itemsNormalizados.reduce((sum, item) => sum + Number(item.cantidad ?? 0) * Number(item.precio_unitario ?? 0), 0).toLocaleString("es-AR")}</span>
           </div>
           <div className="flex justify-between text-red-600">
             <span>Descuentos</span>
-            <span>
-              -${itemsNormalizados
-                .reduce((sum, item) => sum + Number(item.descuento_importe ?? 0), 0)
-                .toLocaleString("es-AR")}
-            </span>
+            <span>-${itemsNormalizados.reduce((sum, item) => sum + Number(item.descuento_importe ?? 0), 0).toLocaleString("es-AR")}</span>
           </div>
           <div className="flex justify-between text-blue-600">
             <span>Bonificaciones</span>
-            <span>
-              -${itemsNormalizados
-                .reduce((sum, item) => sum + Number(item.bonificacion_importe ?? 0), 0)
-                .toLocaleString("es-AR")}
-            </span>
+            <span>-${itemsNormalizados.reduce((sum, item) => sum + Number(item.bonificacion_importe ?? 0), 0).toLocaleString("es-AR")}</span>
           </div>
           <div className="mt-2 flex justify-between border-t pt-2 text-base font-bold">
             <span>Total</span>
