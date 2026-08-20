@@ -92,7 +92,9 @@ export async function crearFactura(formData: FormData) {
     }
   })
 
-  const { error: errorItems } = await supabase.from("factura_items").insert(itemsParaGuardar)
+  // Supabase ya contiene estas columnas, pero database.types.ts local estaba desactualizado.
+  // El cast evita que el tipado antiguo descarte campos que existen realmente en factura_items.
+  const { error: errorItems } = await supabase.from("factura_items").insert(itemsParaGuardar as any)
   if (errorItems) {
     const { error: rollback } = await supabase.from("facturas").delete().eq("id", factura.id)
     if (rollback) throw new Error(`Error guardando items: ${errorItems.message}. No se pudo eliminar la factura incompleta: ${rollback.message}`)
