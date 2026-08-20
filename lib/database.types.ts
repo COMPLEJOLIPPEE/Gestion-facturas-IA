@@ -622,31 +622,55 @@ export type Database = {
       }
       remito_items: {
         Row: {
+          bonificacion_importe: number | null
+          bonificacion_tipo: string | null
           cantidad: number | null
+          cantidad_bonificada: number | null
           descuento: number
+          descuento_importe: number | null
+          descuentos_detalle: Json | null
           id: string
+          precio_bruto_unitario: number | null
           precio_final: number | null
+          precio_neto_unitario: number | null
           precio_unitario: number | null
           producto_id: string | null
           remito_id: string | null
+          subtotal_neto: number | null
         }
         Insert: {
+          bonificacion_importe?: number | null
+          bonificacion_tipo?: string | null
           cantidad?: number | null
+          cantidad_bonificada?: number | null
           descuento?: number
+          descuento_importe?: number | null
+          descuentos_detalle?: Json | null
           id?: string
+          precio_bruto_unitario?: number | null
           precio_final?: number | null
+          precio_neto_unitario?: number | null
           precio_unitario?: number | null
           producto_id?: string | null
           remito_id?: string | null
+          subtotal_neto?: number | null
         }
         Update: {
+          bonificacion_importe?: number | null
+          bonificacion_tipo?: string | null
           cantidad?: number | null
+          cantidad_bonificada?: number | null
           descuento?: number
+          descuento_importe?: number | null
+          descuentos_detalle?: Json | null
           id?: string
+          precio_bruto_unitario?: number | null
           precio_final?: number | null
+          precio_neto_unitario?: number | null
           precio_unitario?: number | null
           producto_id?: string | null
           remito_id?: string | null
+          subtotal_neto?: number | null
         }
         Relationships: [
           {

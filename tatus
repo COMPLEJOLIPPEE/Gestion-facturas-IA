@@ -1,0 +1,688 @@
+warning: in the working copy of 'lib/ai/providers/gemini.ts', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/lib/ai/providers/gemini.ts b/lib/ai/providers/gemini.ts[m
+[1mindex 1914db6..5d37f79 100644[m
+[1m--- a/lib/ai/providers/gemini.ts[m
+[1m+++ b/lib/ai/providers/gemini.ts[m
+[36m@@ -37,7 +37,9 @@[m [masync function withRetry<T>([m
+       lastError = error[m
+ [m
+       if (isServiceUnavailable(error)) {[m
+[31m-        await new Promise((res) => setTimeout(res, delayMs))[m
+[32m+[m[32m        await new Promise((res) =>[m
+[32m+[m[32m          setTimeout(res, delayMs)[m
+[32m+[m[32m        )[m
+       } else {[m
+         throw error[m
+       }[m
+[36m@@ -46,7 +48,9 @@[m [masync function withRetry<T>([m
+ [m
+   throw lastError instanceof Error[m
+     ? lastError[m
+[31m-    : new Error("Gemini no respondió tras varios intentos")[m
+[32m+[m[32m    : new Error([m
+[32m+[m[32m        "Gemini no respondió tras varios intentos"[m
+[32m+[m[32m      )[m
+ }[m
+ [m
+ export async function extraerConGemini([m
+[36m@@ -54,19 +58,27 @@[m [mexport async function extraerConGemini([m
+   mimeType: string,[m
+   tipo: TipoComprobanteIA[m
+ ): Promise<ComprobanteExtraido> {[m
+[31m-  const apiKey = process.env.GEMINI_API_KEY[m
+[32m+[m
+[32m+[m[32m  const apiKey =[m
+[32m+[m[32m    process.env.GEMINI_API_KEY[m
+ [m
+   if (!apiKey) {[m
+[31m-    throw new Error("Falta la variable de entorno GEMINI_API_KEY")[m
+[32m+[m[32m    throw new Error([m
+[32m+[m[32m      "Falta la variable de entorno GEMINI_API_KEY"[m
+[32m+[m[32m    )[m
+   }[m
+ [m
+[31m-  const ai = new GoogleGenAI({ apiKey })[m
+[31m-  const modelo = process.env.GEMINI_MODEL || "gemini-3.5-flash"[m
+[32m+[m[32m  const ai =[m
+[32m+[m[32m    new GoogleGenAI({ apiKey })[m
+[32m+[m
+[32m+[m[32m  const modelo =[m
+[32m+[m[32m    process.env.GEMINI_MODEL ||[m
+[32m+[m[32m    "gemini-3.5-flash"[m
+ [m
+   const contexto =[m
+     tipo === "factura"[m
+       ? "Es una FACTURA de compra argentina."[m
+[31m-      : "Es un REMITO de compra argentino. Un remito no lleva IVA, impuestos internos ni percepciones. Puede contener descuentos y bonificaciones comerciales. IVA debe devolverse como null y los impuestos/percepciones como 0 o no informados."[m
+[32m+[m[32m      : "Es un REMITO de compra argentino."[m
+ [m
+   const prompt = `[m
+ Sos un analista experto en comprobantes de compra de Argentina.[m
+[36m@@ -91,7 +103,9 @@[m [mIdentificá:[m
+ - descuento total[m
+ - subtotal neto[m
+ - IVA total[m
+[31m-- otros cargos, impuestos y percepciones[m
+[32m+[m[32m- impuestos internos[m
+[32m+[m[32m- percepciones[m
+[32m+[m[32m- otros cargos[m
+ - total final[m
+ [m
+ No inventes información.[m
+[36m@@ -112,302 +126,519 @@[m [mPara cada producto real del comprobante identificá:[m
+ - descripcion[m
+ - codigo_proveedor[m
+ - cantidad[m
+[32m+[m[32m- cantidad_bonificada[m
+ - precio_unitario[m
+[31m-- iva[m
+ - descuento[m
+ - porcentaje_descuento[m
+[31m-- bonificacion_importe[m
+[31m-- bonificacion_tipo[m
+[31m-- cantidad_bonificada[m
+[31m-- precio_bruto_unitario[m
+[31m-- precio_neto_unitario[m
+[31m-- subtotal_neto[m
+[32m+[m[32m- descuentos[m
+[32m+[m[32m- grupo_descuento[m
+[32m+[m[32m- bonificacion[m
+[32m+[m[32m- tipo_bonificacion[m
+[32m+[m[32m- cantidad_bonificada_detalle[m
+[32m+[m[32m- precio_neto[m
+ - precio_final[m
+[32m+[m[32m- subtotal_neto[m
+[32m+[m[32m- iva[m
+[32m+[m[32m- iva_importe[m
+[32m+[m[32m- impuestos_internos[m
+ [m
+[31m-==================================================[m
+[31m-REGLA CRÍTICA: PRECIO UNITARIO[m
+[31m-==================================================[m
+[31m-[m
+[31m-"precio_unitario" DEBE ser exclusivamente el importe que aparece[m
+[31m-impreso en la columna/campo "P.UNITARIO", "PRECIO UNIT.", "UNIT. NETO"[m
+[31m-o equivalente que represente el precio unitario del producto ANTES[m
+[31m-de aplicar el descuento o bonificación.[m
+[31m-[m
+[31m-NO uses para precio_unitario:[m
+[31m-[m
+[31m-- subtotal de la línea[m
+[31m-- subtotal neto[m
+[31m-- importe total de la línea[m
+[31m-- IVA[m
+[31m-- impuestos internos[m
+[31m-- precio neto después del descuento[m
+[31m-- precio de otro producto[m
+[31m-- ningún importe obtenido de otra columna[m
+[31m-[m
+[31m-Si una línea tiene una bonificación del 100%, el precio_unitario[m
+[31m-SIGUE siendo el precio unitario original impreso en el comprobante.[m
+[31m-La bonificación debe quedar separada y no modificar precio_unitario.[m
+[32m+[m[32mIMPORTANTE:[m
+ [m
+[31m-El precio_unitario NUNCA debe ser negativo.[m
+[32m+[m[32m"precio_unitario" representa el precio original[m
+[32m+[m[32mANTES de descuentos y bonificaciones.[m
+ [m
+[31m-Si aparece un importe negativo asociado a un descuento,[m
+[31m-NO lo interpretes como precio negativo.[m
+[32m+[m[32mNunca pongas un precio_unitario negativo.[m
+ [m
+ ==================================================[m
+[31m-DESCUENTOS[m
+[32m+[m[32mTIPOS DE DESCUENTO Y BONIFICACIÓN[m
+ ==================================================[m
+ [m
+[31m-Los descuentos pueden aparecer de distintas maneras.[m
+[32m+[m[32mExisten TRES mecanismos principales:[m
+ [m
+[31m-CASO 1:[m
+[31m-El descuento aparece directamente en la línea del producto.[m
+[32m+[m[32m1. DESCUENTO POR PORCENTAJE EN UNA LÍNEA[m
+[32m+[m
+[32m+[m[32mEjemplo:[m
+ [m
+ Producto X[m
+ Precio: 1000[m
+[31m-Descuento: 100[m
+[32m+[m[32mDTO 10%[m
+ [m
+[31m-En ese caso:[m
+[32m+[m[32mEntonces:[m
+ [m
+[32m+[m[32mprecio_unitario = 1000[m
+[32m+[m[32mporcentaje_descuento = 10[m
+ descuento = 100[m
+[31m-precio_final = 900[m
+[32m+[m[32mprecio_neto = 900[m
+ [m
+ --------------------------------------------------[m
+ [m
+[31m-CASO 2:[m
+[31m-El descuento aparece como porcentaje.[m
+[32m+[m[32m2. DESCUENTO POR PORCENTAJE DE UN GRUPO[m
+ [m
+[31m-Producto X[m
+[31m-Precio: 1000[m
+[31m-Descuento 10%[m
+[32m+[m[32mEjemplo:[m
+ [m
+[31m-En ese caso:[m
+[32m+[m[32mProducto A[m
+[32m+[m[32mProducto B[m
+[32m+[m[32mProducto C[m
+ [m
+[31m-descuento = 100[m
+[31m-porcentaje_descuento = 10[m
+[31m-precio_final = 900[m
+[32m+[m[32m30% PRODUCTOS BEBIDAS[m
+ [m
+[31m---------------------------------------------------[m
+[32m+[m[32mLa línea del descuento NO es un producto.[m
+ [m
+[31m-CASO 3:[m
+[31m-El descuento aparece como una línea SEPARADA[m
+[31m-que corresponde a un grupo o segmento de productos.[m
+[32m+[m[32mIdentificá los productos pertenecientes al grupo.[m
+ [m
+[31m-La línea de descuento NO es un producto.[m
+[31m-Debe distribuirse proporcionalmente entre los productos[m
+[31m-correspondientes al segmento.[m
+[32m+[m[32mUsá:[m
+ [m
+[31m---------------------------------------------------[m
+[32m+[m[32mgrupo_descuento[m
+[32m+[m
+[32m+[m[32mpara identificar el grupo.[m
+[32m+[m
+[32m+[m[32mDistribuí el descuento proporcionalmente[m
+[32m+[m[32msegún el valor bruto de cada producto.[m
+[32m+[m
+[32m+[m[32mEjemplo:[m
+[32m+[m
+[32m+[m[32mProducto A = 10.000[m
+[32m+[m[32mProducto B = 20.000[m
+[32m+[m[32mProducto C = 30.000[m
+ [m
+[31m-CASO 4:[m
+[31m-El descuento aparece como un importe negativo[m
+[31m-en una línea separada.[m
+[32m+[m[32mDescuento grupo = 12.000[m
+ [m
+[31m-Ese importe representa un descuento.[m
+[31m-NO debe convertirse en un producto.[m
+[31m-Debe distribuirse entre los productos correspondientes.[m
+[32m+[m[32mEntonces:[m
+[32m+[m
+[32m+[m[32mProducto A → 2.000[m
+[32m+[m[32mProducto B → 4.000[m
+[32m+[m[32mProducto C → 6.000[m
+ [m
+ --------------------------------------------------[m
+ [m
+[31m-REGLA PARA DISTRIBUIR DESCUENTOS DE SEGMENTO:[m
+[32m+[m[32m3. BONIFICACIÓN[m
+[32m+[m
+[32m+[m[32mUna bonificación puede aparecer:[m
+[32m+[m
+[32m+[m[32m- como porcentaje[m
+[32m+[m[32m- como importe[m
+[32m+[m[32m- como cantidad de unidades sin cargo[m
+[32m+[m
+[32m+[m[32mEjemplo:[m
+[32m+[m
+[32m+[m[32mBON 50%[m
+[32m+[m
+[32m+[m[32mo:[m
+[32m+[m
+[32m+[m[32m5 + 1 BONIFICADO[m
+[32m+[m
+[32m+[m[32mEn el caso de unidades bonificadas:[m
+ [m
+[31m-Primero identificá qué productos pertenecen al segmento.[m
+[32m+[m[32mcantidad = cantidad total entregada[m
+ [m
+[31m-Luego calculá el bruto de esos productos:[m
+[32m+[m[32mcantidad_bonificada = unidades entregadas sin cargo[m
+ [m
+[31m-cantidad × precio_unitario[m
+[32m+[m[32mcantidad_bonificada_detalle = cantidad bonificada cuando pueda determinarse[m
+ [m
+[31m-Después distribuí el descuento proporcionalmente[m
+[31m-según la participación de cada producto en el bruto del segmento.[m
+[32m+[m[32mtipo_bonificacion = "cantidad"[m
+ [m
+[31m-El total del descuento distribuido debe coincidir[m
+[31m-con el descuento original del comprobante cuando sea posible.[m
+[32m+[m[32mNO conviertas una bonificación por cantidad[m
+[32m+[m[32men un descuento porcentual ficticio.[m
+ [m
+ ==================================================[m
+[31m-BONIFICACIONES[m
+[32m+[m[32mMÚLTIPLES DESCUENTOS[m
+ ==================================================[m
+ [m
+[31m-También pueden existir bonificaciones comerciales por cantidad,[m
+[31m-por ejemplo:[m
+[32m+[m[32mUna factura puede tener varios descuentos sucesivos.[m
+[32m+[m
+[32m+[m[32mEjemplo:[m
+[32m+[m
+[32m+[m[32mDTO 15%[m
+[32m+[m[32mDTO 10%[m
+[32m+[m[32mDTO 0,50%[m
+[32m+[m
+[32m+[m[32mNO sumes automáticamente:[m
+[32m+[m
+[32m+[m[32m15 + 10 + 0,50 = 25,50%[m
+[32m+[m
+[32m+[m[32mLos descuentos sucesivos deben calcularse uno después del otro.[m
+[32m+[m
+[32m+[m[32mEjemplo:[m
+[32m+[m
+[32m+[m[32mPrecio = 1000[m
+[32m+[m
+[32m+[m[32m15% → 850[m
+ [m
+[31m-- 3 unidades y 1 bonificada[m
+[31m-- 5 unidades y 1 bonificada[m
+[31m-- 5 unidades y 2 bonificadas[m
+[31m-- bonificación 100%[m
+[32m+[m[32m10% sobre 850 → 765[m
+ [m
+[31m-No conviertas la bonificación en un producto separado.[m
+[32m+[m[32m0,50% sobre 765 → 761,175[m
+ [m
+[31m-Conservá siempre el precio_unitario original.[m
+[32m+[m[32mEl resultado debe reflejar el precio neto real.[m
+ [m
+[31m-Si el comprobante permite identificar la cantidad bonificada,[m
+[31m-utilizá esa información.[m
+[32m+[m[32mGuardá cada descuento dentro de:[m
+ [m
+[31m-Cuando pueda determinarse:[m
+[32m+[m[32mdescuentos[][m
+ [m
+[31m-cantidad_bonificada = cantidad de unidades regaladas[m
+[31m-bonificacion_importe = precio correspondiente a esas unidades[m
+[31m-bonificacion_tipo = descripción breve, por ejemplo "3x2", "5x4" o "100%"[m
+[32m+[m[32mCada elemento debe contener:[m
+[32m+[m
+[32m+[m[32mporcentaje[m
+[32m+[m[32mimporte[m
+[32m+[m[32mdescripcion[m
+ [m
+ ==================================================[m
+[31m-REGLAS IMPORTANTES DE DESCUENTOS Y BONIFICACIONES[m
+[32m+[m[32mREGLAS DE DESCUENTOS[m
+ ==================================================[m
+ [m
+ - Nunca inventes descuentos.[m
+ - Nunca conviertas una línea de descuento en producto.[m
+ - Nunca pongas un precio_unitario negativo.[m
+ - Si el descuento aparece negativo, utilizá su valor absoluto.[m
+[31m-- Si el descuento aparece como porcentaje, calculá su importe.[m
+[31m-- Si el descuento corresponde a un grupo, distribuílo proporcionalmente.[m
+[31m-- Si existe bonificación por cantidad, conservá el precio unitario original.[m
+[31m-- Si no existe descuento, descuento debe ser 0.[m
+[31m-- Si no existe bonificación, bonificacion_importe debe ser 0.[m
+[31m-- precio_neto_unitario debe representar el costo neto por unidad luego de descuentos y bonificaciones.[m
+[31m-- subtotal_neto debe representar cantidad × precio_neto_unitario.[m
+[31m-- precio_final debe representar el subtotal neto de la línea.[m
+[32m+[m[32m- Si aparece como porcentaje, calculá su importe.[m
+[32m+[m[32m- Si corresponde a un grupo, distribuílo proporcionalmente.[m
+[32m+[m[32m- Si existen varios descuentos sucesivos, NO los sumes.[m
+[32m+[m[32m- Conservá cada descuento individual.[m
+[32m+[m[32m- Si no existe descuento, descuento = 0.[m
+[32m+[m[32m- precio_neto debe representar el precio después[m
+[32m+[m[32m  de descuentos y bonificaciones.[m
+[32m+[m[32m- precio_final debe mantenerse igual al precio_neto[m
+[32m+[m[32m  para compatibilidad con el sistema actual.[m
+ [m
+ ==================================================[m
+[31m-IMPUESTOS Y PERCEPCIONES[m
+[32m+[m[32mIVA[m
+ ==================================================[m
+ [m
+[31m-Para FACTURAS, prestá especial atención a:[m
+[32m+[m[32mREGLA IMPORTANTE:[m
+[32m+[m
+[32m+[m[32mEn las facturas analizadas, normalmente el IVA[m
+[32m+[m[32mse calcula DESPUÉS de los descuentos.[m
+[32m+[m
+[32m+[m[32mPor lo tanto:[m
+[32m+[m
+[32m+[m[32mprecio bruto[m
+[32m+[m[32m- descuentos / bonificaciones[m
+[32m+[m[32m= precio neto[m
+[32m+[m
+[32m+[m[32mprecio neto[m
+[32m+[m[32m× alícuota IVA[m
+[32m+[m[32m= IVA[m
+[32m+[m
+[32m+[m[32mNo calcules IVA sobre el precio bruto[m
+[32m+[m[32msi la factura muestra claramente que la base imponible[m
+[32m+[m[32mes el precio después del descuento.[m
+[32m+[m
+[32m+[m[32mSi la factura presenta una estructura diferente,[m
+[32m+[m[32mrespetá la información real del comprobante.[m
+[32m+[m
+[32m+[m[32m==================================================[m
+[32m+[m[32mIMPUESTOS INTERNOS[m
+[32m+[m[32m==================================================[m
+[32m+[m
+[32m+[m[32mLos impuestos internos pueden aparecer:[m
+[32m+[m
+[32m+[m[32m- por producto[m
+[32m+[m[32m- como columna[m
+[32m+[m[32m- como total al pie.[m
+[32m+[m
+[32m+[m[32mSi están claramente asociados a una línea:[m
+[32m+[m
+[32m+[m[32mimpuestos_internos = importe de esa línea.[m
+[32m+[m
+[32m+[m[32mSi solamente aparece un total general[m
+[32m+[m[32msin poder determinar su distribución:[m
+[32m+[m
+[32m+[m[32mNO inventes una distribución.[m
+[32m+[m
+[32m+[m[32mEn ese caso registralo como cargo:[m
+[32m+[m
+[32m+[m[32mdescripcion = "Impuestos Internos"[m
+[32m+[m
+[32m+[m[32mNo confundas impuestos internos con IVA.[m
+[32m+[m
+[32m+[m[32mNo confundas impuestos internos con percepciones.[m
+[32m+[m
+[32m+[m[32m==================================================[m
+[32m+[m[32mPERCEPCIONES Y OTROS CARGOS[m
+[32m+[m[32m==================================================[m
+[32m+[m
+[32m+[m[32mPueden existir:[m
+ [m
+[31m-- IVA[m
+[31m-- Impuestos internos[m
+ - Percepción IVA[m
+ - Percepción IIBB Buenos Aires[m
+ - Percepción IIBB CABA[m
+ - otras percepciones[m
+[32m+[m[32m- otros impuestos[m
+ - otros cargos[m
+ [m
+[31m-No confundas IVA con percepción de IVA.[m
+[31m-No confundas impuestos internos con percepciones.[m
+[32m+[m[32mEstos conceptos deben ir en:[m
+ [m
+[31m-Para REMITOS:[m
+[32m+[m[32mcargos[][m
+ [m
+[31m-- no agregues IVA[m
+[31m-- no agregues impuestos internos[m
+[31m-- no agregues percepciones[m
+[31m-- no inventes cargos fiscales[m
+[32m+[m[32mCada cargo debe contener:[m
+ [m
+[31m-Los conceptos fiscales solo deben aparecer cuando realmente estén[m
+[31m-informados en una FACTURA.[m
+[32m+[m[32mdescripcion[m
+[32m+[m[32mimporte[m
+[32m+[m
+[32m+[m[32mUna percepción cobrada debe quedar como importe positivo.[m
+ [m
+ ==================================================[m
+[31m-IMPUESTOS INTERNOS[m
+[32m+[m[32mCÁLCULOS[m
+ ==================================================[m
+ [m
+[31m-Los impuestos internos pueden aparecer por línea, como columna[m
+[31m-o como total al pie de una FACTURA.[m
+[32m+[m[32mCuando la información permita calcularlo:[m
+ [m
+[31m-Si aparecen como total separado y no están asociados claramente[m
+[31m-a una línea específica, registralos como cargo con una descripción clara.[m
+[32m+[m[32msubtotal_bruto[m
+[32m+[m[32m-[m
+[32m+[m[32mdescuentos y bonificaciones[m
+[32m+[m[32m=[m
+[32m+[m[32msubtotal_neto[m
+[32m+[m
+[32m+[m[32mLuego:[m
+[32m+[m
+[32m+[m[32msubtotal_neto[m
+[32m+[m[32m+[m
+[32m+[m[32mIVA[m
+[32m+[m[32m+[m
+[32m+[m[32mimpuestos internos[m
+[32m+[m[32m+[m
+[32m+[m[32mpercepciones[m
+[32m+[m[32m+[m
+[32m+[m[32motros cargos[m
+[32m+[m[32m≈[m
+[32m+[m[32mtotal[m
+[32m+[m
+[32m+[m[32mPuede existir una diferencia mínima por redondeo.[m
+ [m
+ ==================================================[m
+ VALIDACIÓN[m
+ ==================================================[m
+ [m
+[31m-Antes de responder verificá matemáticamente cuando la información[m
+[31m-lo permita:[m
+[31m-[m
+[31m-subtotal_bruto[m
+[31m-- descuento_total[m
+[31m-= subtotal_neto[m
+[31m-[m
+[31m-Para facturas:[m
+[31m-subtotal_neto[m
+[31m-+ IVA[m
+[31m-+ impuestos/cargos[m
+[31m-+ percepciones[m
+[31m-≈ total[m
+[32m+[m[32mAntes de responder verificá:[m
+ [m
+[31m-Para remitos:[m
+[31m-subtotal_bruto[m
+[31m-- descuento_total[m
+[31m-- bonificaciones[m
+[31m-= subtotal_neto[m
+[31m-= total cuando no existan otros conceptos comerciales.[m
+[32m+[m[32m1. Que las cantidades sean correctas.[m
+[32m+[m[32m2. Que ningún precio unitario sea negativo.[m
+[32m+[m[32m3. Que los descuentos no se conviertan en productos.[m
+[32m+[m[32m4. Que las bonificaciones por cantidad sean identificadas.[m
+[32m+[m[32m5. Que los descuentos sucesivos no se sumen incorrectamente.[m
+[32m+[m[32m6. Que el IVA se calcule sobre la base correcta.[m
+[32m+[m[32m7. Que los impuestos internos no se confundan con percepciones.[m
+[32m+[m[32m8. Que el total sea coherente con los importes del comprobante.[m
+ [m
+[31m-Puede existir una diferencia mínima por redondeos.[m
+[32m+[m[32mNo inventes información.[m
+ [m
+[31m-IMPORTANTE:[m
+[31m-Si el precio unitario leído de la columna correspondiente[m
+[31m-no coincide con el subtotal porque existe una bonificación,[m
+[31m-NO corrijas el precio unitario para hacerlo coincidir.[m
+[31m-El precio unitario debe conservar el valor impreso.[m
+[32m+[m[32mSi un cálculo no puede determinarse con seguridad,[m
+[32m+[m[32mdevolvé null.[m
+ [m
+ ==================================================[m
+[32m+[m
+ IMPORTANTE FINAL[m
+ [m
+ No agregues explicaciones.[m
+[32m+[m
+ No agregues texto fuera del JSON.[m
+[32m+[m
+ Respondé únicamente el JSON solicitado.[m
+ `[m
+ [m
+[31m-  const response = await withRetry(() =>[m
+[31m-    ai.models.generateContent({[m
+[31m-      model: modelo,[m
+[31m-      contents: [[m
+[31m-        {[m
+[31m-          role: "user",[m
+[31m-          parts: [[m
+[31m-            { text: prompt },[m
+[31m-            {[m
+[31m-              inlineData: {[m
+[31m-                mimeType,[m
+[31m-                data: base64,[m
+[32m+[m[32m  const response =[m
+[32m+[m[32m    await withRetry(() =>[m
+[32m+[m[32m      ai.models.generateContent({[m
+[32m+[m[32m        model: modelo,[m
+[32m+[m
+[32m+[m[32m        contents: [[m
+[32m+[m[32m          {[m
+[32m+[m[32m            role: "user",[m
+[32m+[m
+[32m+[m[32m            parts: [[m
+[32m+[m[32m              {[m
+[32m+[m[32m                text: prompt,[m
+[32m+[m[32m              },[m
+[32m+[m
+[32m+[m[32m              {[m
+[32m+[m[32m                inlineData: {[m
+[32m+[m[32m                  mimeType,[m
+[32m+[m[32m                  data: base64,[m
+[32m+[m[32m                },[m
+               },[m
+[31m-            },[m
+[31m-          ],[m
+[32m+[m[32m            ],[m
+[32m+[m[32m          },[m
+[32m+[m[32m        ],[m
+[32m+[m
+[32m+[m[32m        config: {[m
+[32m+[m[32m          responseMimeType:[m
+[32m+[m[32m            "application/json",[m
+[32m+[m
+[32m+[m[32m          responseSchema:[m
+[32m+[m[32m            schema,[m
+         },[m
+[31m-      ],[m
+[31m-      config: {[m
+[31m-        responseMimeType: "application/json",[m
+[31m-        responseSchema: schema,[m
+[31m-      },[m
+[31m-    })[m
+[31m-  )[m
+[32m+[m[32m      })[m
+[32m+[m[32m    )[m
+ [m
+[31m-  const texto = response.text[m
+[32m+[m[32m  const texto =[m
+[32m+[m[32m    response.text[m
+ [m
+   if (!texto) {[m
+[31m-    throw new Error("Gemini no devolvió contenido")[m
+[32m+[m[32m    throw new Error([m
+[32m+[m[32m      "Gemini no devolvió contenido"[m
+[32m+[m[32m    )[m
+   }[m
+ [m
+[31m-  const data = JSON.parse(texto) as ComprobanteExtraido[m
+[32m+[m[32m  const data =[m
+[32m+[m[32m    JSON.parse(texto) as ComprobanteExtraido[m
+ [m
+   return {[m
+[31m-    proveedor_nombre: data.proveedor_nombre ?? null,[m
+[31m-    numero: data.numero ?? null,[m
+[31m-    fecha: data.fecha ?? null,[m
+[31m-    fecha_vencimiento: data.fecha_vencimiento ?? null,[m
+[31m-    subtotal_bruto: data.subtotal_bruto ?? null,[m
+[31m-    descuento_total: data.descuento_total ?? null,[m
+[31m-    subtotal_neto: data.subtotal_neto ?? null,[m
+[31m-    iva_total: data.iva_total ?? null,[m
+[31m-    cargos: (data.cargos ?? []).map((cargo) => ({[m
+[31m-      descripcion: cargo.descripcion,[m
+[31m-      importe: Math.abs(Number(cargo.importe ?? 0)),[m
+[31m-    })),[m
+[31m-    total: data.total ?? null,[m
+[31m-    lineas: (data.lineas ?? []).map((l) => ({[m
+[31m-      descripcion: l.descripcion,[m
+[31m-      cantidad: Number(l.cantidad ?? 0),[m
+[31m-      precio_unitario: Math.abs(Number(l.precio_unitario ?? 0)),[m
+[31m-      iva: l.iva ?? null,[m
+[31m-      descuento: Math.abs(Number(l.descuento ?? 0)),[m
+[31m-      porcentaje_descuento: l.porcentaje_descuento ?? null,[m
+[31m-      bonificacion_importe: Math.abs(Number(l.bonificacion_importe ?? 0)),[m
+[31m-      bonificacion_tipo: l.bonificacion_tipo ?? null,[m
+[31m-      cantidad_bonificada: l.cantidad_bonificada ?? null,[m
+[31m-      precio_bruto_unitario: l.precio_bruto_unitario ?? null,[m
+[31m-      precio_neto_unitario: l.precio_neto_unitario ?? null,[m
+[31m-      subtotal_neto: l.subtotal_neto ?? null,[m
+[31m-      precio_final: l.precio_final ?? null,[m
+[31m-      codigo_proveedor: l.codigo_proveedor ?? null,[m
+[31m-      producto_id: undefined,[m
+[31m-      score: undefined,[m
+[31m-      confianza: undefined,[m
+[31m-      motivo: undefined,[m
+[31m-      fuente: undefined,[m
+[31m-    })),[m
+[32m+[m
+[32m+[m[32m    proveedor_nombre:[m
+[32m+[m[32m      data.proveedor_nombre ?? null,[m
+[32m+[m
+[32m+[m[32m    numero:[m
+[32m+[m[32m      data.numero ?? null,[m
+[32m+[m
+[32m+[m[32m    fecha:[m
+[32m+[m[32m      data.fecha ?? null,[m
+[32m+[m
+[32m+[m[32m    fecha_vencimiento:[m
+[32m+[m[32m      data.fecha_vencimiento ?? null,[m
+[32m+[m
+[32m+[m[32m    subtotal_bruto:[m
+[32m+[m[32m      data.subtotal_bruto ?? null,[m
+[32m+[m
+[32m+[m[32m    descuento_total:[m
+[32m+[m[32m      data.descuento_total ?? null,[m
+[32m+[m
+[32m+[m[32m    subtotal_neto:[m
+[32m+[m[32m      data.subtotal_neto ?? null,[m
+[32m+[m
+[32m+[m[32m    iva_total:[m
+[32m+[m[32m      data.iva_total ?? null,[m
+[32m+[m
+[32m+[m[32m    cargos:[m
+[32m+[m[32m      (data.cargos ?? []).map((cargo) => ({[m
+[32m+[m[32m        descripcion:[m
+[32m+[m[32m          cargo.descripcion,[m
+[32m+[m
+[32m+[m[32m        importe:[m
+[32m+[m[32m          Math.abs([m
+[32m+[m[32m            Number(cargo.importe ?? 0)[m
+[32m+[m[32m          ),[m
+[32m+[m[32m      })),[m
+[32m+[m
+[32m+[m[32m    total:[m
+[32m+[m[32m      data.total ?? null,[m
+[32m+[m
+[32m+[m[32m    lineas:[m
+[32m+[m[32m      (data.lineas ?? []).map((l) => ({[m
+[32m+[m
+[32m+[m[32m        descripcion:[m
+[32m+[m[32m          l.descripcion,[m
+[32m+[m
+[32m+[m[32m        cantidad:[m
+[32m+[m[32m          Number(l.cantidad ?? 0),[m
+[32m+[m
+[32m+[m[32m        cantidad_bonificada:[m
+[32m+[m[32m          l.cantidad_bonificada ?? null,[m
+[32m+[m
+[32m+[m[32m        precio_unitario:[m
+[32m+[m[32m          Math.abs([m
+[32m+[m[32m            Number([m
+[32m+[m[32m              l.precio_unitario ?? 0[m
+[32m+[m[32m            )[m
+[32m+[m[32m          ),[m
+[32m+[m
+[32m+[m[32m        descuento:[m
+[32m+[m[32m          Math.abs([m
+[32m+[m[32m            Number([m
+[32m+[m[32m              l.descuen

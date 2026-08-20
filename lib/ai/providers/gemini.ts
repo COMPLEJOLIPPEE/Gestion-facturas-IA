@@ -37,7 +37,9 @@ async function withRetry<T>(
       lastError = error
 
       if (isServiceUnavailable(error)) {
-        await new Promise((res) => setTimeout(res, delayMs))
+        await new Promise((res) =>
+          setTimeout(res, delayMs)
+        )
       } else {
         throw error
       }
@@ -46,7 +48,9 @@ async function withRetry<T>(
 
   throw lastError instanceof Error
     ? lastError
-    : new Error("Gemini no respondió tras varios intentos")
+    : new Error(
+        "Gemini no respondió tras varios intentos"
+      )
 }
 
 export async function extraerConGemini(
@@ -54,19 +58,27 @@ export async function extraerConGemini(
   mimeType: string,
   tipo: TipoComprobanteIA
 ): Promise<ComprobanteExtraido> {
-  const apiKey = process.env.GEMINI_API_KEY
+
+  const apiKey =
+    process.env.GEMINI_API_KEY
 
   if (!apiKey) {
-    throw new Error("Falta la variable de entorno GEMINI_API_KEY")
+    throw new Error(
+      "Falta la variable de entorno GEMINI_API_KEY"
+    )
   }
 
-  const ai = new GoogleGenAI({ apiKey })
-  const modelo = process.env.GEMINI_MODEL || "gemini-3.5-flash"
+  const ai =
+    new GoogleGenAI({ apiKey })
+
+  const modelo =
+    process.env.GEMINI_MODEL ||
+    "gemini-3.5-flash"
 
   const contexto =
     tipo === "factura"
       ? "Es una FACTURA de compra argentina."
-      : "Es un REMITO de compra argentino. Un remito no lleva IVA, impuestos internos ni percepciones. Puede contener descuentos y bonificaciones comerciales. IVA debe devolverse como null y los impuestos/percepciones como 0 o no informados."
+      : "Es un REMITO de compra argentino."
 
   const prompt = `
 Sos un analista experto en comprobantes de compra de Argentina.
@@ -91,7 +103,9 @@ Identificá:
 - descuento total
 - subtotal neto
 - IVA total
-- otros cargos, impuestos y percepciones
+- impuestos internos
+- percepciones
+- otros cargos
 - total final
 
 No inventes información.
@@ -112,302 +126,519 @@ Para cada producto real del comprobante identificá:
 - descripcion
 - codigo_proveedor
 - cantidad
+- cantidad_bonificada
 - precio_unitario
-- iva
 - descuento
 - porcentaje_descuento
-- bonificacion_importe
-- bonificacion_tipo
-- cantidad_bonificada
-- precio_bruto_unitario
-- precio_neto_unitario
-- subtotal_neto
+- descuentos
+- grupo_descuento
+- bonificacion
+- tipo_bonificacion
+- cantidad_bonificada_detalle
+- precio_neto
 - precio_final
+- subtotal_neto
+- iva
+- iva_importe
+- impuestos_internos
+
+IMPORTANTE:
+
+"precio_unitario" representa el precio original
+ANTES de descuentos y bonificaciones.
+
+Nunca pongas un precio_unitario negativo.
 
 ==================================================
-REGLA CRÍTICA: PRECIO UNITARIO
+TIPOS DE DESCUENTO Y BONIFICACIÓN
 ==================================================
 
-"precio_unitario" DEBE ser exclusivamente el importe que aparece
-impreso en la columna/campo "P.UNITARIO", "PRECIO UNIT.", "UNIT. NETO"
-o equivalente que represente el precio unitario del producto ANTES
-de aplicar el descuento o bonificación.
+Existen TRES mecanismos principales:
 
-NO uses para precio_unitario:
+1. DESCUENTO POR PORCENTAJE EN UNA LÍNEA
 
-- subtotal de la línea
-- subtotal neto
-- importe total de la línea
-- IVA
-- impuestos internos
-- precio neto después del descuento
-- precio de otro producto
-- ningún importe obtenido de otra columna
-
-Si una línea tiene una bonificación del 100%, el precio_unitario
-SIGUE siendo el precio unitario original impreso en el comprobante.
-La bonificación debe quedar separada y no modificar precio_unitario.
-
-El precio_unitario NUNCA debe ser negativo.
-
-Si aparece un importe negativo asociado a un descuento,
-NO lo interpretes como precio negativo.
-
-==================================================
-DESCUENTOS
-==================================================
-
-Los descuentos pueden aparecer de distintas maneras.
-
-CASO 1:
-El descuento aparece directamente en la línea del producto.
+Ejemplo:
 
 Producto X
 Precio: 1000
-Descuento: 100
+DTO 10%
 
-En ese caso:
+Entonces:
 
-descuento = 100
-precio_final = 900
-
---------------------------------------------------
-
-CASO 2:
-El descuento aparece como porcentaje.
-
-Producto X
-Precio: 1000
-Descuento 10%
-
-En ese caso:
-
-descuento = 100
+precio_unitario = 1000
 porcentaje_descuento = 10
-precio_final = 900
+descuento = 100
+precio_neto = 900
 
 --------------------------------------------------
 
-CASO 3:
-El descuento aparece como una línea SEPARADA
-que corresponde a un grupo o segmento de productos.
+2. DESCUENTO POR PORCENTAJE DE UN GRUPO
 
-La línea de descuento NO es un producto.
-Debe distribuirse proporcionalmente entre los productos
-correspondientes al segmento.
+Ejemplo:
+
+Producto A
+Producto B
+Producto C
+
+30% PRODUCTOS BEBIDAS
+
+La línea del descuento NO es un producto.
+
+Identificá los productos pertenecientes al grupo.
+
+Usá:
+
+grupo_descuento
+
+para identificar el grupo.
+
+Distribuí el descuento proporcionalmente
+según el valor bruto de cada producto.
+
+Ejemplo:
+
+Producto A = 10.000
+Producto B = 20.000
+Producto C = 30.000
+
+Descuento grupo = 12.000
+
+Entonces:
+
+Producto A → 2.000
+Producto B → 4.000
+Producto C → 6.000
 
 --------------------------------------------------
 
-CASO 4:
-El descuento aparece como un importe negativo
-en una línea separada.
+3. BONIFICACIÓN
 
-Ese importe representa un descuento.
-NO debe convertirse en un producto.
-Debe distribuirse entre los productos correspondientes.
+Una bonificación puede aparecer:
 
---------------------------------------------------
+- como porcentaje
+- como importe
+- como cantidad de unidades sin cargo
 
-REGLA PARA DISTRIBUIR DESCUENTOS DE SEGMENTO:
+Ejemplo:
 
-Primero identificá qué productos pertenecen al segmento.
+BON 50%
 
-Luego calculá el bruto de esos productos:
+o:
 
-cantidad × precio_unitario
+5 + 1 BONIFICADO
 
-Después distribuí el descuento proporcionalmente
-según la participación de cada producto en el bruto del segmento.
+En el caso de unidades bonificadas:
 
-El total del descuento distribuido debe coincidir
-con el descuento original del comprobante cuando sea posible.
+cantidad = cantidad total entregada
 
-==================================================
-BONIFICACIONES
-==================================================
+cantidad_bonificada = unidades entregadas sin cargo
 
-También pueden existir bonificaciones comerciales por cantidad,
-por ejemplo:
+cantidad_bonificada_detalle = cantidad bonificada cuando pueda determinarse
 
-- 3 unidades y 1 bonificada
-- 5 unidades y 1 bonificada
-- 5 unidades y 2 bonificadas
-- bonificación 100%
+tipo_bonificacion = "cantidad"
 
-No conviertas la bonificación en un producto separado.
-
-Conservá siempre el precio_unitario original.
-
-Si el comprobante permite identificar la cantidad bonificada,
-utilizá esa información.
-
-Cuando pueda determinarse:
-
-cantidad_bonificada = cantidad de unidades regaladas
-bonificacion_importe = precio correspondiente a esas unidades
-bonificacion_tipo = descripción breve, por ejemplo "3x2", "5x4" o "100%"
+NO conviertas una bonificación por cantidad
+en un descuento porcentual ficticio.
 
 ==================================================
-REGLAS IMPORTANTES DE DESCUENTOS Y BONIFICACIONES
+MÚLTIPLES DESCUENTOS
+==================================================
+
+Una factura puede tener varios descuentos sucesivos.
+
+Ejemplo:
+
+DTO 15%
+DTO 10%
+DTO 0,50%
+
+NO sumes automáticamente:
+
+15 + 10 + 0,50 = 25,50%
+
+Los descuentos sucesivos deben calcularse uno después del otro.
+
+Ejemplo:
+
+Precio = 1000
+
+15% → 850
+
+10% sobre 850 → 765
+
+0,50% sobre 765 → 761,175
+
+El resultado debe reflejar el precio neto real.
+
+Guardá cada descuento dentro de:
+
+descuentos[]
+
+Cada elemento debe contener:
+
+porcentaje
+importe
+descripcion
+
+==================================================
+REGLAS DE DESCUENTOS
 ==================================================
 
 - Nunca inventes descuentos.
 - Nunca conviertas una línea de descuento en producto.
 - Nunca pongas un precio_unitario negativo.
 - Si el descuento aparece negativo, utilizá su valor absoluto.
-- Si el descuento aparece como porcentaje, calculá su importe.
-- Si el descuento corresponde a un grupo, distribuílo proporcionalmente.
-- Si existe bonificación por cantidad, conservá el precio unitario original.
-- Si no existe descuento, descuento debe ser 0.
-- Si no existe bonificación, bonificacion_importe debe ser 0.
-- precio_neto_unitario debe representar el costo neto por unidad luego de descuentos y bonificaciones.
-- subtotal_neto debe representar cantidad × precio_neto_unitario.
-- precio_final debe representar el subtotal neto de la línea.
+- Si aparece como porcentaje, calculá su importe.
+- Si corresponde a un grupo, distribuílo proporcionalmente.
+- Si existen varios descuentos sucesivos, NO los sumes.
+- Conservá cada descuento individual.
+- Si no existe descuento, descuento = 0.
+- precio_neto debe representar el precio después
+  de descuentos y bonificaciones.
+- precio_final debe mantenerse igual al precio_neto
+  para compatibilidad con el sistema actual.
 
 ==================================================
-IMPUESTOS Y PERCEPCIONES
+IVA
 ==================================================
 
-Para FACTURAS, prestá especial atención a:
+REGLA IMPORTANTE:
 
-- IVA
-- Impuestos internos
-- Percepción IVA
-- Percepción IIBB Buenos Aires
-- Percepción IIBB CABA
-- otras percepciones
-- otros cargos
+En las facturas analizadas, normalmente el IVA
+se calcula DESPUÉS de los descuentos.
 
-No confundas IVA con percepción de IVA.
-No confundas impuestos internos con percepciones.
+Por lo tanto:
 
-Para REMITOS:
+precio bruto
+- descuentos / bonificaciones
+= precio neto
 
-- no agregues IVA
-- no agregues impuestos internos
-- no agregues percepciones
-- no inventes cargos fiscales
+precio neto
+× alícuota IVA
+= IVA
 
-Los conceptos fiscales solo deben aparecer cuando realmente estén
-informados en una FACTURA.
+No calcules IVA sobre el precio bruto
+si la factura muestra claramente que la base imponible
+es el precio después del descuento.
+
+Si la factura presenta una estructura diferente,
+respetá la información real del comprobante.
 
 ==================================================
 IMPUESTOS INTERNOS
 ==================================================
 
-Los impuestos internos pueden aparecer por línea, como columna
-o como total al pie de una FACTURA.
+Los impuestos internos pueden aparecer:
 
-Si aparecen como total separado y no están asociados claramente
-a una línea específica, registralos como cargo con una descripción clara.
+- por producto
+- como columna
+- como total al pie.
+
+Si están claramente asociados a una línea:
+
+impuestos_internos = importe de esa línea.
+
+Si solamente aparece un total general
+sin poder determinar su distribución:
+
+NO inventes una distribución.
+
+En ese caso registralo como cargo:
+
+descripcion = "Impuestos Internos"
+
+No confundas impuestos internos con IVA.
+
+No confundas impuestos internos con percepciones.
+
+==================================================
+PERCEPCIONES Y OTROS CARGOS
+==================================================
+
+Pueden existir:
+
+- Percepción IVA
+- Percepción IIBB Buenos Aires
+- Percepción IIBB CABA
+- otras percepciones
+- otros impuestos
+- otros cargos
+
+Estos conceptos deben ir en:
+
+cargos[]
+
+Cada cargo debe contener:
+
+descripcion
+importe
+
+Una percepción cobrada debe quedar como importe positivo.
+
+==================================================
+CÁLCULOS
+==================================================
+
+Cuando la información permita calcularlo:
+
+subtotal_bruto
+-
+descuentos y bonificaciones
+=
+subtotal_neto
+
+Luego:
+
+subtotal_neto
++
+IVA
++
+impuestos internos
++
+percepciones
++
+otros cargos
+≈
+total
+
+Puede existir una diferencia mínima por redondeo.
 
 ==================================================
 VALIDACIÓN
 ==================================================
 
-Antes de responder verificá matemáticamente cuando la información
-lo permita:
+Antes de responder verificá:
 
-subtotal_bruto
-- descuento_total
-= subtotal_neto
+1. Que las cantidades sean correctas.
+2. Que ningún precio unitario sea negativo.
+3. Que los descuentos no se conviertan en productos.
+4. Que las bonificaciones por cantidad sean identificadas.
+5. Que los descuentos sucesivos no se sumen incorrectamente.
+6. Que el IVA se calcule sobre la base correcta.
+7. Que los impuestos internos no se confundan con percepciones.
+8. Que el total sea coherente con los importes del comprobante.
 
-Para facturas:
-subtotal_neto
-+ IVA
-+ impuestos/cargos
-+ percepciones
-≈ total
+No inventes información.
 
-Para remitos:
-subtotal_bruto
-- descuento_total
-- bonificaciones
-= subtotal_neto
-= total cuando no existan otros conceptos comerciales.
-
-Puede existir una diferencia mínima por redondeos.
-
-IMPORTANTE:
-Si el precio unitario leído de la columna correspondiente
-no coincide con el subtotal porque existe una bonificación,
-NO corrijas el precio unitario para hacerlo coincidir.
-El precio unitario debe conservar el valor impreso.
+Si un cálculo no puede determinarse con seguridad,
+devolvé null.
 
 ==================================================
+
 IMPORTANTE FINAL
 
 No agregues explicaciones.
+
 No agregues texto fuera del JSON.
+
 Respondé únicamente el JSON solicitado.
 `
 
-  const response = await withRetry(() =>
-    ai.models.generateContent({
-      model: modelo,
-      contents: [
-        {
-          role: "user",
-          parts: [
-            { text: prompt },
-            {
-              inlineData: {
-                mimeType,
-                data: base64,
-              },
-            },
-          ],
-        },
-      ],
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: schema,
-      },
-    })
-  )
+  const response =
+    await withRetry(() =>
+      ai.models.generateContent({
+        model: modelo,
 
-  const texto = response.text
+        contents: [
+          {
+            role: "user",
+
+            parts: [
+              {
+                text: prompt,
+              },
+
+              {
+                inlineData: {
+                  mimeType,
+                  data: base64,
+                },
+              },
+            ],
+          },
+        ],
+
+        config: {
+          responseMimeType:
+            "application/json",
+
+          responseSchema:
+            schema,
+        },
+      })
+    )
+
+  const texto =
+    response.text
 
   if (!texto) {
-    throw new Error("Gemini no devolvió contenido")
+    throw new Error(
+      "Gemini no devolvió contenido"
+    )
   }
 
-  const data = JSON.parse(texto) as ComprobanteExtraido
+  const data =
+    JSON.parse(texto) as ComprobanteExtraido
 
   return {
-    proveedor_nombre: data.proveedor_nombre ?? null,
-    numero: data.numero ?? null,
-    fecha: data.fecha ?? null,
-    fecha_vencimiento: data.fecha_vencimiento ?? null,
-    subtotal_bruto: data.subtotal_bruto ?? null,
-    descuento_total: data.descuento_total ?? null,
-    subtotal_neto: data.subtotal_neto ?? null,
-    iva_total: data.iva_total ?? null,
-    cargos: (data.cargos ?? []).map((cargo) => ({
-      descripcion: cargo.descripcion,
-      importe: Math.abs(Number(cargo.importe ?? 0)),
-    })),
-    total: data.total ?? null,
-    lineas: (data.lineas ?? []).map((l) => ({
-      descripcion: l.descripcion,
-      cantidad: Number(l.cantidad ?? 0),
-      precio_unitario: Math.abs(Number(l.precio_unitario ?? 0)),
-      iva: l.iva ?? null,
-      descuento: Math.abs(Number(l.descuento ?? 0)),
-      porcentaje_descuento: l.porcentaje_descuento ?? null,
-      bonificacion_importe: Math.abs(Number(l.bonificacion_importe ?? 0)),
-      bonificacion_tipo: l.bonificacion_tipo ?? null,
-      cantidad_bonificada: l.cantidad_bonificada ?? null,
-      precio_bruto_unitario: l.precio_bruto_unitario ?? null,
-      precio_neto_unitario: l.precio_neto_unitario ?? null,
-      subtotal_neto: l.subtotal_neto ?? null,
-      precio_final: l.precio_final ?? null,
-      codigo_proveedor: l.codigo_proveedor ?? null,
-      producto_id: undefined,
-      score: undefined,
-      confianza: undefined,
-      motivo: undefined,
-      fuente: undefined,
-    })),
+
+    proveedor_nombre:
+      data.proveedor_nombre ?? null,
+
+    numero:
+      data.numero ?? null,
+
+    fecha:
+      data.fecha ?? null,
+
+    fecha_vencimiento:
+      data.fecha_vencimiento ?? null,
+
+    subtotal_bruto:
+      data.subtotal_bruto ?? null,
+
+    descuento_total:
+      data.descuento_total ?? null,
+
+    subtotal_neto:
+      data.subtotal_neto ?? null,
+
+    iva_total:
+      data.iva_total ?? null,
+
+    cargos:
+      (data.cargos ?? []).map((cargo) => ({
+        descripcion:
+          cargo.descripcion,
+
+        importe:
+          Math.abs(
+            Number(cargo.importe ?? 0)
+          ),
+      })),
+
+    total:
+      data.total ?? null,
+
+    lineas:
+      (data.lineas ?? []).map((l) => ({
+
+        descripcion:
+          l.descripcion,
+
+        cantidad:
+          Number(l.cantidad ?? 0),
+
+        cantidad_bonificada:
+          l.cantidad_bonificada ?? null,
+
+        precio_unitario:
+          Math.abs(
+            Number(
+              l.precio_unitario ?? 0
+            )
+          ),
+
+        descuento:
+          Math.abs(
+            Number(
+              l.descuento ?? 0
+            )
+          ),
+
+        porcentaje_descuento:
+          l.porcentaje_descuento ?? null,
+
+        tipo_descuento:
+          l.tipo_descuento ?? null,
+
+        descuentos:
+          (l.descuentos ?? []).map(
+            (descuento) => ({
+              porcentaje:
+                descuento.porcentaje ?? null,
+
+              importe:
+                descuento.importe != null
+                  ? Math.abs(
+                      Number(
+                        descuento.importe
+                      )
+                    )
+                  : null,
+
+              descripcion:
+                descuento.descripcion ?? null,
+            })
+          ),
+
+        grupo_descuento:
+          l.grupo_descuento ?? null,
+
+        bonificacion:
+          l.bonificacion != null
+            ? Math.abs(
+                Number(l.bonificacion)
+              )
+            : null,
+
+        tipo_bonificacion:
+          l.tipo_bonificacion ?? null,
+
+        cantidad_bonificada_detalle:
+          l.cantidad_bonificada_detalle ?? null,
+
+        precio_neto:
+          l.precio_neto != null
+            ? Number(l.precio_neto)
+            : null,
+
+        precio_final:
+          l.precio_final != null
+            ? Number(l.precio_final)
+            : null,
+
+        subtotal_neto:
+          l.subtotal_neto != null
+            ? Number(l.subtotal_neto)
+            : null,
+
+        iva:
+          l.iva ?? null,
+
+        iva_importe:
+          l.iva_importe != null
+            ? Number(l.iva_importe)
+            : null,
+
+        impuestos_internos:
+          l.impuestos_internos != null
+            ? Math.abs(
+                Number(
+                  l.impuestos_internos
+                )
+              )
+            : null,
+
+        codigo_proveedor:
+          l.codigo_proveedor ?? null,
+
+        producto_id:
+          undefined,
+
+        score:
+          undefined,
+
+        confianza:
+          undefined,
+
+        motivo:
+          undefined,
+
+        fuente:
+          undefined,
+
+      })),
+
   }
 }
