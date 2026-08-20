@@ -35,26 +35,42 @@ export const schema = {
           descripcion: { type: Type.STRING },
           codigo_proveedor: { type: Type.STRING, nullable: true },
           cantidad: { type: Type.NUMBER },
-
-          // Precio informado en la columna de precio unitario del comprobante.
-          precio_unitario: { type: Type.NUMBER },
-
-          // Facturas: IVA informado por la línea. Remitos: debe ser null.
-          iva: { type: Type.NUMBER, nullable: true },
-
-          // Descuento monetario aplicado a la línea.
-          descuento: { type: Type.NUMBER, nullable: true },
-          porcentaje_descuento: { type: Type.NUMBER, nullable: true },
-
-          // Bonificaciones comerciales, por ejemplo 3x2 o 5x4.
-          bonificacion_importe: { type: Type.NUMBER, nullable: true },
-          bonificacion_tipo: { type: Type.STRING, nullable: true },
           cantidad_bonificada: { type: Type.NUMBER, nullable: true },
+          cantidad_bonificada_detalle: { type: Type.NUMBER, nullable: true },
 
+          precio_unitario: { type: Type.NUMBER },
           precio_bruto_unitario: { type: Type.NUMBER, nullable: true },
+          precio_neto: { type: Type.NUMBER, nullable: true },
           precio_neto_unitario: { type: Type.NUMBER, nullable: true },
           subtotal_neto: { type: Type.NUMBER, nullable: true },
           precio_final: { type: Type.NUMBER, nullable: true },
+
+          iva: { type: Type.NUMBER, nullable: true },
+          iva_importe: { type: Type.NUMBER, nullable: true },
+          impuestos_internos: { type: Type.NUMBER, nullable: true },
+
+          descuento: { type: Type.NUMBER, nullable: true },
+          porcentaje_descuento: { type: Type.NUMBER, nullable: true },
+          tipo_descuento: { type: Type.STRING, nullable: true },
+
+          descuentos: {
+            type: Type.ARRAY,
+            items: {
+              type: Type.OBJECT,
+              properties: {
+                porcentaje: { type: Type.NUMBER, nullable: true },
+                importe: { type: Type.NUMBER, nullable: true },
+                descripcion: { type: Type.STRING, nullable: true },
+              },
+            },
+          },
+
+          grupo_descuento: { type: Type.STRING, nullable: true },
+
+          bonificacion: { type: Type.NUMBER, nullable: true },
+          bonificacion_importe: { type: Type.NUMBER, nullable: true },
+          bonificacion_tipo: { type: Type.STRING, nullable: true },
+          tipo_bonificacion: { type: Type.STRING, nullable: true },
         },
         required: ["descripcion", "cantidad", "precio_unitario"],
       },
