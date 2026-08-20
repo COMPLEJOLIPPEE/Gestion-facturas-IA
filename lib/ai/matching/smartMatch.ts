@@ -17,14 +17,12 @@ export function smartMatch(
   descripcionIA: string,
   productos: ProductoBD[]
 ): SmartMatch {
-
   const productoIA = parseProducto(descripcionIA);
 
   let mejorProducto: ProductoBD | null = null;
   let mejorScore = 0;
 
   for (const producto of productos) {
-
     const productoBD = parseProducto(producto.nombre);
 
     let score = 0;
@@ -94,27 +92,21 @@ export function smartMatch(
   let motivo: string;
 
   if (scoreFinal >= 90) {
-
     confianza = "alta";
 
     motivo =
       "Coincidencia alta por marca, presentación y descripción.";
-
   } else if (scoreFinal >= 70) {
-
     confianza = "media";
 
     motivo =
       "Coincidencia parcial. Conviene revisar el producto.";
-
   } else {
-
     confianza = "baja";
 
     motivo =
       "No se encontró una coincidencia confiable.";
 
-    // No asignamos automáticamente un producto
     mejorProducto = null;
   }
 

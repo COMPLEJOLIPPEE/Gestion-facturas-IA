@@ -81,27 +81,21 @@ export function parseProducto(
 
   // Unidad
 
-  if (texto.toLowerCase().includes("kg")) {
+  const textoMinusculas = texto.toLowerCase();
+
+  if (/\b\d+(?:[.,]\d+)?\s?kg\b/.test(textoMinusculas)) {
 
     resultado.unidad = "kg";
 
-  } else if (
-    texto.toLowerCase().includes("gr") ||
-    texto.toLowerCase().includes("g")
-  ) {
+  } else if (/\b\d+(?:[.,]\d+)?\s?(?:g|gr)\b/.test(textoMinusculas)) {
 
     resultado.unidad = "gr";
 
-  } else if (
-    texto.toLowerCase().includes("ml")
-  ) {
+  } else if (/\b\d+(?:[.,]\d+)?\s?ml\b/.test(textoMinusculas)) {
 
     resultado.unidad = "ml";
 
-  } else if (
-    texto.toLowerCase().includes("lt") ||
-    texto.toLowerCase().includes("l ")
-  ) {
+  } else if (/\b\d+(?:[.,]\d+)?\s?(?:lt|l)\b/.test(textoMinusculas)) {
 
     resultado.unidad = "lt";
 

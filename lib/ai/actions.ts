@@ -87,19 +87,13 @@ export async function leerRemitoConIA(
  * coincidencias con los productos existentes.
  */
 export async function procesarLineasFacturaConIA(
-  proveedorId: string,
+  proveedorId: string | null,
   lineas: ComprobanteExtraido["lineas"],
   productos: {
     id: string
     nombre: string
   }[]
 ) {
-
-  if (!proveedorId) {
-    throw new Error(
-      "No se puede procesar la factura sin proveedor."
-    )
-  }
 
   const supabase = await createClient()
 

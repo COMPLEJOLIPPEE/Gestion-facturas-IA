@@ -30,6 +30,12 @@ export async function crearFactura(formData: FormData) {
     )
   }
 
+  if (items.some((item) => !item.producto_id)) {
+    throw new Error(
+      "Todas las líneas deben tener un producto seleccionado"
+    )
+  }
+
   const subtotal =
     Number(formData.get("subtotal"))
 
@@ -109,6 +115,19 @@ export async function crearFactura(formData: FormData) {
       )
 
   if (errorItems) {
+    const { error: errorRollback } =
+      await supabase
+        .from("facturas")
+        .delete()
+        .eq("id", factura.id)
+
+    if (errorRollback) {
+      throw new Error(
+        `Error guardando items: ${errorItems.message}. ` +
+        `No se pudo eliminar la factura incompleta: ${errorRollback.message}`
+      )
+    }
+
     throw new Error(
       `Error guardando items: ${errorItems.message}`
     )

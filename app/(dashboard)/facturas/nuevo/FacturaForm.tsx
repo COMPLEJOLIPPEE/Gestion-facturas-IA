@@ -216,78 +216,42 @@ const {
 
   let subtotalBruto = 0
   let descuentosTotal = 0
-
-  // -----------------------------------------
-  // 1. Neto bruto de productos
-  // -----------------------------------------
-
-  lineas.forEach((linea) => {
-
-    const bruto =
-      Number(linea.cantidad ?? 0) *
-      Number(linea.precio_unitario ?? 0)
-
-    subtotalBruto += bruto
-
-    descuentosTotal +=
-      Math.abs(Number(linea.descuento ?? 0))
-  })
-
-  // -----------------------------------------
-  // 2. Neto después de descuentos
-  // -----------------------------------------
-
-  const subtotalNeto =
-    Math.max(
-      0,
-      subtotalBruto - descuentosTotal
-    )
-
-  // -----------------------------------------
-  // 3. IVA
-  //
-  // Si los descuentos están cargados
-  // directamente en las líneas, se respetan.
-  //
-  // Si el descuento es global/por segmento,
-  // se distribuye proporcionalmente entre
-  // las líneas según su valor bruto.
-  // -----------------------------------------
-
   let ivaTotal = 0
 
+  // -----------------------------------------
+  // 1. Calcular cada línea
+  // -----------------------------------------
+
   lineas.forEach((linea) => {
 
-    const bruto =
-      Number(linea.cantidad ?? 0) *
+    const cantidad =
+      Number(linea.cantidad ?? 0)
+
+    const precioUnitario =
       Number(linea.precio_unitario ?? 0)
 
-    if (bruto <= 0) return
+    const bruto =
+      cantidad * precioUnitario
 
     const descuentoLinea =
-      Math.abs(Number(linea.descuento ?? 0))
+      Math.abs(
+        Number(linea.descuento ?? 0)
+      )
 
-    let descuentoAplicado =
-      descuentoLinea
-
-    // Si la línea no tiene descuento propio,
-    // distribuimos proporcionalmente el descuento
-    // global/por segmento.
-    if (
-      descuentoAplicado === 0 &&
-      subtotalBruto > 0 &&
-      descuentosTotal > 0
-    ) {
-      descuentoAplicado =
-        descuentosTotal *
-        (bruto / subtotalBruto)
-    }
-
+    // Neto real de esta línea
     const netoLinea =
       Math.max(
         0,
-        bruto - descuentoAplicado
+        bruto - descuentoLinea
       )
+
+    subtotalBruto += bruto
+
+    descuentosTotal += descuentoLinea
+
+    // ---------------------------------------
+    // IVA de la línea
+    // ---------------------------------------
 
     const ivaLinea =
       Number(linea.iva ?? 0)
@@ -307,7 +271,17 @@ const {
   })
 
   // -----------------------------------------
-  // 4. Otros cargos / percepciones
+  // 2. Subtotal neto
+  // -----------------------------------------
+
+  const subtotalNeto =
+    Math.max(
+      0,
+      subtotalBruto - descuentosTotal
+    )
+
+  // -----------------------------------------
+  // 3. Otros cargos
   // -----------------------------------------
 
   const totalCargos =
@@ -321,27 +295,37 @@ const {
     )
 
   // -----------------------------------------
-  // 5. Total final
+  // 4. Total final
   // -----------------------------------------
+
+  const ivaRedondeado =
+    Number(
+      ivaTotal.toFixed(2)
+    )
 
   const totalCalculado =
     subtotalNeto +
-    ivaTotal +
+    ivaRedondeado +
     totalCargos
 
   return {
-    // Mostramos el neto después de descuentos
-    subtotal: subtotalNeto,
+    subtotal:
+      Number(
+        subtotalNeto.toFixed(2)
+      ),
 
-    descuentos: descuentosTotal,
+    descuentos:
+      Number(
+        descuentosTotal.toFixed(2)
+      ),
 
-    iva: Number(
-      ivaTotal.toFixed(2)
-    ),
+    iva:
+      ivaRedondeado,
 
-    total: Number(
-      totalCalculado.toFixed(2)
-    ),
+    total:
+      Number(
+        totalCalculado.toFixed(2)
+      ),
   }
 
 }, [lineas, cargos])
@@ -447,14 +431,11 @@ async function aplicarDatosFacturaIA(
   // Procesar productos con IA
   // -----------------------------------------
 
-  if (
-    datos.lineas.length > 0 &&
-    proveedorDetectadoId
-  ) {
+  if (datos.lineas.length > 0) {
 
     const lineasProcesadas =
       await procesarLineasFacturaConIA(
-        proveedorDetectadoId,
+        proveedorDetectadoId || null,
         datos.lineas,
         productos.map((producto) => ({
           id: producto.id,
@@ -464,40 +445,6 @@ async function aplicarDatosFacturaIA(
 
     setLineas(
       lineasProcesadas
-    )
-
-  } else {
-
-    setLineas(
-      datos.lineas.map((l) => ({
-        producto_id: "",
-        cantidad: l.cantidad || 1,
-        precio_unitario:
-          l.precio_unitario || 0,
-        iva: l.iva ?? 21,
-
-        descuento:
-          l.descuento ?? 0,
-
-        precio_final:
-          l.precio_final ??
-          Math.max(
-            0,
-            (l.cantidad || 1) *
-              (l.precio_unitario || 0) -
-              (l.descuento ?? 0)
-          ),
-
-        codigo_proveedor:
-          l.codigo_proveedor ??
-          undefined,
-
-        descripcionLeida:
-          l.descripcion,
-
-        autoMatcheado:
-          false,
-      }))
     )
   }
 }

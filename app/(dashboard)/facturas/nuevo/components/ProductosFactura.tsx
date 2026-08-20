@@ -24,6 +24,10 @@ export type LineaFactura = {
   motivo?: string;
   aprendido?: boolean;
   fuente?: "alias" | "smartmatch" | "manual";
+
+  // Sugerencia de SmartMatch cuando la confianza es media
+  producto_sugerido_id?: string;
+  producto_sugerido_nombre?: string;
 };
 
 type Props = {
@@ -63,7 +67,8 @@ export default function ProductosFactura({
         <div>
           <h2 className="text-xl font-semibold">Productos</h2>
           <p className="mt-1 text-sm text-gray-500">
-            Revise los productos detectados por IA o agregue nuevos manualmente.
+            Revise los productos detectados por IA o agregue nuevos
+            manualmente.
           </p>
         </div>
 
@@ -94,83 +99,200 @@ export default function ProductosFactura({
           </div>
 
           {lineas.map((linea, index) => {
-const bruto =
-  linea.cantidad * linea.precio_unitario;
+            const bruto =
+              linea.cantidad * linea.precio_unitario;
 
-const descuento =
-  linea.descuento ?? 0;
+            const descuento =
+              linea.descuento ?? 0;
 
-const subtotal =
-  Math.max(0, bruto - descuento);
+            const subtotal =
+              Math.max(0, bruto - descuento);
+
             return (
-              <div key={index} className="mb-4 grid grid-cols-12 items-start gap-3">
+              <div
+                key={index}
+                className="mb-4 grid grid-cols-12 items-start gap-3"
+              >
                 <div className="col-span-4">
                   <select
                     value={linea.producto_id}
                     required
-                    onChange={(e) => actualizarProductoDeLinea(index, e.target.value)}
+                    onChange={(e) =>
+                      actualizarProductoDeLinea(
+                        index,
+                        e.target.value
+                      )
+                    }
                     className="w-full rounded-lg border border-gray-300 p-2"
                   >
-                    <option value="">Seleccionar producto...</option>
+                    <option value="">
+                      Seleccionar producto...
+                    </option>
+
                     {productos.map((producto) => (
-                      <option key={producto.id} value={producto.id}>
+                      <option
+                        key={producto.id}
+                        value={producto.id}
+                      >
                         {producto.nombre}
                       </option>
                     ))}
                   </select>
-{!linea.producto_id &&
-  linea.descripcionLeida && (
-    <button
-      type="button"
-      onClick={() =>
-        crearProductoDesdeLinea(
-          index,
-          linea.descripcionLeida ?? "",
-          Number(linea.precio_unitario ?? 0),
-          Number(linea.iva ?? 21)
-        )
-      }
-      className="mt-2 w-full rounded-md bg-green-600 px-3 py-2 text-xs font-semibold text-white hover:bg-green-700"
-    >
-      + Crear este producto
-    </button>
-  )}
+
+                  {/* ------------------------------------------------ */}
+                  {/* CREAR PRODUCTO                                   */}
+                  {/* ------------------------------------------------ */}
+
+                  {!linea.producto_id &&
+                    !linea.producto_sugerido_id &&
+                    linea.descripcionLeida && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          crearProductoDesdeLinea(
+                            index,
+                            linea.descripcionLeida ?? "",
+                            Number(
+                              linea.precio_unitario ?? 0
+                            ),
+                            Number(
+                              linea.iva ?? 21
+                            )
+                          )
+                        }
+                        className="mt-2 w-full rounded-md bg-green-600 px-3 py-2 text-xs font-semibold text-white hover:bg-green-700"
+                      >
+                        + Crear este producto
+                      </button>
+                    )}
+
+                  {/* ------------------------------------------------ */}
+                  {/* CONFIANZA ALTA                                   */}
+                  {/* ------------------------------------------------ */}
 
                   {linea.confianza === "alta" && (
                     <div className="mt-2 rounded-md bg-green-50 p-2">
-                      <p className="text-xs font-semibold text-green-700">{linea.score ?? ""}% de confianza</p>
-                      <p className="text-xs text-green-600">{linea.motivo}</p>
+                      <p className="text-xs font-semibold text-green-700">
+                        🟢 {linea.score ?? ""}% de confianza
+                      </p>
+
+                      <p className="text-xs text-green-600">
+                        {linea.motivo}
+                      </p>
                     </div>
                   )}
 
-                  {linea.confianza === "media" && (
-                    <div className="mt-2 rounded-md bg-yellow-50 p-2">
-                      <p className="text-xs font-semibold text-yellow-700">{linea.score ?? ""}% de confianza</p>
-                      <p className="text-xs text-yellow-700">{linea.motivo}</p>
-                    </div>
-                  )}
+                  {/* ------------------------------------------------ */}
+                  {/* CONFIANZA MEDIA - SUGERENCIA                    */}
+                  {/* ------------------------------------------------ */}
+
+                  {linea.confianza === "media" &&
+                    linea.producto_sugerido_id && (
+                      <div className="mt-2 rounded-md border border-yellow-200 bg-yellow-50 p-3">
+                        <p className="text-xs font-semibold text-yellow-700">
+                          🟡 Sugerencia de IA ·{" "}
+                          {linea.score ?? 0}% de confianza
+                        </p>
+
+                        <p className="mt-1 text-xs text-yellow-700">
+                          {linea.motivo}
+                        </p>
+
+                        <div className="mt-2 rounded-md bg-white p-2">
+                          <p className="text-[11px] text-gray-500">
+                            Producto sugerido
+                          </p>
+
+                          <p className="text-sm font-semibold text-gray-800">
+                            {linea.producto_sugerido_nombre}
+                          </p>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() =>
+                            actualizarProductoDeLinea(
+                              index,
+                              linea.producto_sugerido_id!
+                            )
+                          }
+                          className="mt-2 w-full rounded-md bg-yellow-500 px-3 py-2 text-xs font-semibold text-white hover:bg-yellow-600"
+                        >
+                          ✓ Usar esta sugerencia
+                        </button>
+                      </div>
+                    )}
+
+                  {/* ------------------------------------------------ */}
+                  {/* CONFIANZA MEDIA SIN PRODUCTO                    */}
+                  {/* ------------------------------------------------ */}
+
+                  {linea.confianza === "media" &&
+                    !linea.producto_sugerido_id && (
+                      <div className="mt-2 rounded-md bg-yellow-50 p-2">
+                        <p className="text-xs font-semibold text-yellow-700">
+                          🟡 Coincidencia parcial
+                        </p>
+
+                        <p className="text-xs text-yellow-700">
+                          {linea.motivo}
+                        </p>
+                      </div>
+                    )}
+
+                  {/* ------------------------------------------------ */}
+                  {/* CONFIANZA BAJA                                   */}
+                  {/* ------------------------------------------------ */}
 
                   {linea.confianza === "baja" && (
                     <div className="mt-2 rounded-md bg-red-50 p-2">
-                      <p className="text-xs font-semibold text-red-700">Producto no reconocido</p>
-                      <p className="text-xs text-red-700">Seleccione el producto correcto.</p>
+                      <p className="text-xs font-semibold text-red-700">
+                        🔴 Producto no reconocido
+                      </p>
+
+                      <p className="text-xs text-red-700">
+                        Seleccione el producto correcto.
+                      </p>
                     </div>
                   )}
+
+                  {/* ------------------------------------------------ */}
+                  {/* ALIAS / APRENDIDO                                */}
+                  {/* ------------------------------------------------ */}
 
                   {linea.fuente === "alias" && (
-
                     <div className="mt-2 rounded-md bg-blue-50 p-2">
-                      <p className="text-xs font-semibold text-blue-700"> 🧠 Aprendido </p>
-                      <p className="text-xs text-blue-600"> 100% de confianza · Reconocido por historial del proveedor. </p>
+                      <p className="text-xs font-semibold text-blue-700">
+                        🧠 Aprendido
+                      </p>
+
+                      <p className="text-xs text-blue-600">
+                        100% de confianza · Reconocido por
+                        historial del proveedor.
+                      </p>
                     </div>
                   )}
+
+                  {/* ------------------------------------------------ */}
+                  {/* TEXTO LEÍDO POR IA                               */}
+                  {/* ------------------------------------------------ */}
+
                   {linea.descripcionLeida && (
                     <div className="mt-2 rounded bg-gray-100 p-2">
-                      <p className="text-[11px] text-gray-500">Texto leído por IA</p>
-                      <p className="text-xs font-medium">{linea.descripcionLeida}</p>
+                      <p className="text-[11px] text-gray-500">
+                        Texto leído por IA
+                      </p>
+
+                      <p className="text-xs font-medium">
+                        {linea.descripcionLeida}
+                      </p>
                     </div>
                   )}
                 </div>
+
+                {/* ------------------------------------------------ */}
+                {/* CANTIDAD                                         */}
+                {/* ------------------------------------------------ */}
 
                 <div className="col-span-2">
                   <input
@@ -178,10 +300,20 @@ const subtotal =
                     min="0"
                     step="0.01"
                     value={linea.cantidad}
-                    onChange={(e) => actualizarLinea(index, "cantidad", Number(e.target.value))}
+                    onChange={(e) =>
+                      actualizarLinea(
+                        index,
+                        "cantidad",
+                        Number(e.target.value)
+                      )
+                    }
                     className="w-full rounded-lg border border-gray-300 p-2 text-center"
                   />
                 </div>
+
+                {/* ------------------------------------------------ */}
+                {/* PRECIO UNITARIO                                   */}
+                {/* ------------------------------------------------ */}
 
                 <div className="col-span-2">
                   <input
@@ -189,15 +321,31 @@ const subtotal =
                     min="0"
                     step="0.01"
                     value={linea.precio_unitario}
-                    onChange={(e) => actualizarLinea(index, "precio_unitario", Number(e.target.value))}
+                    onChange={(e) =>
+                      actualizarLinea(
+                        index,
+                        "precio_unitario",
+                        Number(e.target.value)
+                      )
+                    }
                     className="w-full rounded-lg border border-gray-300 p-2 text-right"
                   />
                 </div>
 
+                {/* ------------------------------------------------ */}
+                {/* IVA                                               */}
+                {/* ------------------------------------------------ */}
+
                 <div className="col-span-1">
                   <select
                     value={linea.iva}
-                    onChange={(e) => actualizarLinea(index, "iva", Number(e.target.value))}
+                    onChange={(e) =>
+                      actualizarLinea(
+                        index,
+                        "iva",
+                        Number(e.target.value)
+                      )
+                    }
                     className="w-full rounded-lg border border-gray-300 p-2 text-center"
                   >
                     <option value={21}>21%</option>
@@ -206,11 +354,23 @@ const subtotal =
                   </select>
                 </div>
 
+                {/* ------------------------------------------------ */}
+                {/* SUBTOTAL                                          */}
+                {/* ------------------------------------------------ */}
+
                 <div className="col-span-2">
                   <div className="rounded-lg bg-gray-50 p-2 text-right font-medium">
-                    ${subtotal.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    $
+                    {subtotal.toLocaleString("es-AR", {
+                      minimumFractionDigits: 2,
+                      maximumFractionDigits: 2,
+                    })}
                   </div>
                 </div>
+
+                {/* ------------------------------------------------ */}
+                {/* ELIMINAR                                          */}
+                {/* ------------------------------------------------ */}
 
                 <div className="col-span-1 flex justify-center">
                   <button
@@ -229,7 +389,9 @@ const subtotal =
 
       {lineas.length > 0 && (
         <div className="mt-4 rounded-lg bg-blue-50 p-3 text-sm text-blue-700">
-          Consejo: cuando un producto no sea reconocido por la IA, podrá asociarse o crearse directamente desde esta pantalla en una próxima actualización.
+          Consejo: las coincidencias de confianza media se muestran
+          como sugerencias para que pueda revisarlas antes de
+          asignarlas.
         </div>
       )}
     </div>
