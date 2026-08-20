@@ -8,6 +8,22 @@ type Props = {
   params: Promise<{ id: string }>
 }
 
+type RemitoItem = {
+  id: string
+  cantidad: number | null
+  precio_unitario: number | null
+  descuento_importe: number | null
+  bonificacion_importe: number | null
+  precio_neto_unitario: number | null
+  subtotal_neto: number | null
+  bonificacion_tipo: string | null
+  cantidad_bonificada: number | null
+  productos:
+    | { nombre: string | null; codigo: string | null; unidad_medida: string | null }
+    | { nombre: string | null; codigo: string | null; unidad_medida: string | null }[]
+    | null
+}
+
 export default async function RemitoDetallePage({ params }: Props) {
   const { id } = await params
   const supabase = await createClient()
@@ -51,11 +67,21 @@ export default async function RemitoDetallePage({ params }: Props) {
     `)
     .eq("remito_id", id)
 
-  const itemsNormalizados = (items ?? []).map((item) => ({
-    ...(item ?? {}),
-    productos: Array.isArray(item?.productos)
+  const itemsNormalizados: Array<Omit<RemitoItem, "productos"> & { productos: RemitoItem["productos"] }> = (
+    (items ?? []) as unknown as RemitoItem[]
+  ).map((item) => ({
+    id: item.id,
+    cantidad: item.cantidad,
+    precio_unitario: item.precio_unitario,
+    descuento_importe: item.descuento_importe,
+    bonificacion_importe: item.bonificacion_importe,
+    precio_neto_unitario: item.precio_neto_unitario,
+    subtotal_neto: item.subtotal_neto,
+    bonificacion_tipo: item.bonificacion_tipo,
+    cantidad_bonificada: item.cantidad_bonificada,
+    productos: Array.isArray(item.productos)
       ? item.productos[0] ?? null
-      : item?.productos ?? null,
+      : item.productos ?? null,
   }))
 
   const [{ data: pagos }, { data: formasPago }] = await Promise.all([
@@ -82,12 +108,8 @@ export default async function RemitoDetallePage({ params }: Props) {
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-3xl font-bold">📦 Comprobante de compra</h1>
-          <p className="mt-2 text-lg font-medium">
-            {remito.numero ?? "Sin número"}
-          </p>
-          <p className="text-gray-600">
-            {proveedor?.nombre_fantasia ?? "Sin proveedor"}
-          </p>
+          <p className="mt-2 text-lg font-medium">{remito.numero ?? "Sin número"}</p>
+          <p className="text-gray-600">{proveedor?.nombre_fantasia ?? "Sin proveedor"}</p>
           <p className="text-sm text-gray-500">
             {empresa?.razon_social ?? "Sin empresa"} · {formatDateAR(remito.fecha)}
           </p>
@@ -109,8 +131,7 @@ export default async function RemitoDetallePage({ params }: Props) {
         <div className="mb-5">
           <h2 className="text-xl font-semibold">📦 Productos</h2>
           <p className="mt-1 text-sm text-gray-500">
-            Los remitos no incluyen IVA ni impuestos. Los descuentos y bonificaciones
-            reducen directamente el importe neto de la línea.
+            Los remitos no incluyen IVA ni impuestos. Los descuentos y bonificaciones reducen directamente el importe neto de la línea.
           </p>
         </div>
 
@@ -130,13 +151,11 @@ export default async function RemitoDetallePage({ params }: Props) {
             </thead>
             <tbody>
               {itemsNormalizados.map((item) => {
-                const bruto =
-                  Number(item.cantidad ?? 0) * Number(item.precio_unitario ?? 0)
+                const bruto = Number(item.cantidad ?? 0) * Number(item.precio_unitario ?? 0)
                 const descuento = Number(item.descuento_importe ?? 0)
                 const bonificacion = Number(item.bonificacion_importe ?? 0)
                 const neto = Number(
-                  item.subtotal_neto ??
-                  Math.max(0, bruto - descuento - bonificacion)
+                  item.subtotal_neto ?? Math.max(0, bruto - descuento - bonificacion)
                 )
 
                 return (
@@ -149,27 +168,19 @@ export default async function RemitoDetallePage({ params }: Props) {
                       ${Number(item.precio_unitario ?? 0).toLocaleString("es-AR")}
                     </td>
                     <td className="py-3 text-right">
-                      {descuento > 0 && (
-                        <div className="text-red-600">-${descuento.toLocaleString("es-AR")}</div>
-                      )}
+                      {descuento > 0 && <div className="text-red-600">-${descuento.toLocaleString("es-AR")}</div>}
                       {bonificacion > 0 && (
-                        <div className="text-blue-600">
-                          Bonif. -${bonificacion.toLocaleString("es-AR")}
-                        </div>
+                        <div className="text-blue-600">Bonif. -${bonificacion.toLocaleString("es-AR")}</div>
                       )}
                       {item.cantidad_bonificada && (
-                        <div className="text-xs text-blue-600">
-                          {item.cantidad_bonificada} bonificada(s)
-                        </div>
+                        <div className="text-xs text-blue-600">{item.cantidad_bonificada} bonificada(s)</div>
                       )}
                       {descuento === 0 && bonificacion === 0 && "—"}
                     </td>
                     <td className="py-3 text-right font-medium">
                       ${Number(item.precio_neto_unitario ?? 0).toLocaleString("es-AR")}
                     </td>
-                    <td className="py-3 text-right font-semibold">
-                      ${neto.toLocaleString("es-AR")}
-                    </td>
+                    <td className="py-3 text-right font-semibold">${neto.toLocaleString("es-AR")}</td>
                   </tr>
                 )
               })}
@@ -184,11 +195,7 @@ export default async function RemitoDetallePage({ params }: Props) {
             <span>Total bruto</span>
             <span>
               ${itemsNormalizados
-                .reduce(
-                  (sum, item) =>
-                    sum + Number(item.cantidad ?? 0) * Number(item.precio_unitario ?? 0),
-                  0
-                )
+                .reduce((sum, item) => sum + Number(item.cantidad ?? 0) * Number(item.precio_unitario ?? 0), 0)
                 .toLocaleString("es-AR")}
             </span>
           </div>
@@ -218,21 +225,15 @@ export default async function RemitoDetallePage({ params }: Props) {
       <div className="grid gap-4 md:grid-cols-3">
         <div className="rounded-lg bg-gray-50 p-4">
           <p className="text-sm text-gray-500">Total del comprobante</p>
-          <p className="mt-1 text-xl font-bold">
-            ${Number(remito.monto_total ?? 0).toLocaleString("es-AR")}
-          </p>
+          <p className="mt-1 text-xl font-bold">${Number(remito.monto_total ?? 0).toLocaleString("es-AR")}</p>
         </div>
         <div className="rounded-lg bg-green-50 p-4">
           <p className="text-sm text-gray-500">Total pagado</p>
-          <p className="mt-1 text-xl font-bold text-green-700">
-            ${totalPagado.toLocaleString("es-AR")}
-          </p>
+          <p className="mt-1 text-xl font-bold text-green-700">${totalPagado.toLocaleString("es-AR")}</p>
         </div>
         <div className="rounded-lg bg-amber-50 p-4">
           <p className="text-sm text-gray-500">Saldo pendiente</p>
-          <p className="mt-1 text-xl font-bold text-amber-700">
-            ${saldoPendiente.toLocaleString("es-AR")}
-          </p>
+          <p className="mt-1 text-xl font-bold text-amber-700">${saldoPendiente.toLocaleString("es-AR")}</p>
         </div>
       </div>
 
