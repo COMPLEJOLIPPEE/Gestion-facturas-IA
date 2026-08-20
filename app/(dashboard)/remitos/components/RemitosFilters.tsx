@@ -11,7 +11,6 @@ type Empresa = {
 type Props = {
   proveedores: Proveedor[];
   empresas: Empresa[];
-
   buscar?: string;
   proveedor?: string;
   empresa?: string;
@@ -27,18 +26,10 @@ export default function RemitosFilters({
   estado = "",
 }: Props) {
   return (
-    <form
-      method="GET"
-      className="rounded-xl bg-white p-5 shadow"
-    >
+    <form method="GET" className="rounded-xl bg-white p-5 shadow">
       <div className="grid gap-4 md:grid-cols-6">
-
         <div className="md:col-span-2">
-
-          <label className="mb-1 block text-sm font-medium">
-            Buscar
-          </label>
-
+          <label className="mb-1 block text-sm font-medium">Buscar</label>
           <input
             type="text"
             name="buscar"
@@ -46,114 +37,69 @@ export default function RemitosFilters({
             placeholder="Número o proveedor..."
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
           />
-
         </div>
 
         <div>
-
-          <label className="mb-1 block text-sm font-medium">
-            Estado
-          </label>
-
+          <label className="mb-1 block text-sm font-medium">Estado</label>
           <select
             name="estado"
             defaultValue={estado}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
           >
-            <option value="">
-              Todos
-            </option>
-
-            <option value="pendiente">
-              Pendiente
-            </option>
-
-            <option value="parcial">
-              Parcial
-            </option>
-
-            <option value="pagado">
-              Pagado
-            </option>
-
+            <option value="">Todos</option>
+            <option value="pendiente">Pendiente</option>
+            <option value="parcial">Parcial</option>
+            <option value="pagada">Pagada</option>
+            <option value="vencida">Vencida</option>
           </select>
-
         </div>
 
         <div>
-
-          <label className="mb-1 block text-sm font-medium">
-            Proveedor
-          </label>
-
+          <label className="mb-1 block text-sm font-medium">Proveedor</label>
           <select
             name="proveedor"
             defaultValue={proveedor}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
           >
-            <option value="">
-              Todos
-            </option>
-
+            <option value="">Todos</option>
             {proveedores.map((p) => (
-              <option
-                key={p.id}
-                value={p.id}
-              >
+              <option key={p.id} value={p.id}>
                 {p.nombre_fantasia}
               </option>
             ))}
-
           </select>
-
         </div>
 
         <div>
-
-          <label className="mb-1 block text-sm font-medium">
-            Empresa
-          </label>
-
+          <label className="mb-1 block text-sm font-medium">Empresa</label>
           <select
             name="empresa"
             defaultValue={empresa}
             className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
           >
-            <option value="">
-              Todas
-            </option>
-
+            <option value="">Todas</option>
             {empresas.map((e) => (
-              <option
-                key={e.id}
-                value={e.id}
-              >
+              <option key={e.id} value={e.id}>
                 {e.razon_social}
               </option>
             ))}
-
           </select>
-
         </div>
 
         <div className="flex items-end gap-2">
-
           <button
             type="submit"
             className="flex-1 rounded-lg bg-black px-4 py-2 text-white hover:bg-gray-800"
           >
             Buscar
           </button>
-
           <a
             href="/remitos"
             className="rounded-lg border border-gray-300 px-4 py-2 text-sm hover:bg-gray-100"
           >
             Limpiar
           </a>
-
         </div>
-
       </div>
     </form>
   );
