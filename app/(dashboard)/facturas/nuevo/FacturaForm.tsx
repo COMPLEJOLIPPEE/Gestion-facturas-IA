@@ -100,7 +100,11 @@ export function FacturaForm({ proveedores, empresas, productos, formasPago }: Pr
     const lineasCalculadas = lineas.map((linea) => {
       const cantidad = numero(linea.cantidad)
       const precioUnitario = Math.abs(numero(linea.precio_unitario))
-      const bruto = cantidad * precioUnitario
+      const precioBrutoUnitario =
+        linea.precio_bruto_unitario != null
+          ? Math.abs(numero(linea.precio_bruto_unitario))
+          : precioUnitario
+      const bruto = cantidad * precioBrutoUnitario
       const descuento = Math.abs(numero(linea.descuento))
       const bonificacion = Math.abs(numero(linea.bonificacion))
       const cantidadBonificada = Math.min(
@@ -111,10 +115,29 @@ export function FacturaForm({ proveedores, empresas, productos, formasPago }: Pr
       const bonificacionImporte = bonificacionPorCantidad
         ? cantidadBonificada * precioUnitario
         : bonificacion
-      const subtotalNeto = Math.max(0, bruto - descuento - bonificacionImporte)
-      const precioNeto = cantidad > 0 ? subtotalNeto / cantidad : 0
+
+      const subtotalNetoCalculado = Math.max(
+        0,
+        bruto - descuento - bonificacionImporte
+      )
+      const subtotalNetoExtraido =
+        linea.subtotal_neto != null
+          ? Math.abs(numero(linea.subtotal_neto))
+          : null
+      const subtotalNeto = subtotalNetoExtraido ?? subtotalNetoCalculado
+
+      const precioNeto =
+        linea.precio_neto != null
+          ? Math.abs(numero(linea.precio_neto))
+          : cantidad > 0
+            ? subtotalNeto / cantidad
+            : 0
+
       const tasaIVA = numero(linea.iva)
-      const ivaImporte = subtotalNeto * (tasaIVA / 100)
+      const ivaImporte =
+        linea.iva_importe != null
+          ? Math.abs(numero(linea.iva_importe))
+          : subtotalNeto * (tasaIVA / 100)
       const impuestosInternos = Math.abs(numero(linea.impuestos_internos))
 
       return {
@@ -125,7 +148,11 @@ export function FacturaForm({ proveedores, empresas, productos, formasPago }: Pr
         bonificacion,
         cantidad_bonificada: cantidadBonificada,
         precio_neto: redondear(precioNeto),
-        precio_final: redondear(precioNeto),
+        precio_final: redondear(
+          linea.precio_final != null
+            ? Math.abs(numero(linea.precio_final))
+            : precioNeto
+        ),
         subtotal_neto: redondear(subtotalNeto),
         iva_importe: redondear(ivaImporte),
         impuestos_internos: redondear(impuestosInternos),
@@ -148,7 +175,12 @@ export function FacturaForm({ proveedores, empresas, productos, formasPago }: Pr
     const totalCargos = cargos.reduce((acumulado, cargo) => acumulado + Math.abs(numero(cargo.importe)), 0)
     const ivaRedondeado = redondear(resumen.iva)
     const impuestosInternosRedondeados = redondear(resumen.impuestosInternos)
-    const totalCalculado = redondear(resumen.subtotalNeto + ivaRedondeado + impuestosInternosRedondeados + totalCargos)
+    const totalCalculado = redondear(
+      resumen.subtotalNeto +
+      ivaRedondeado +
+      impuestosInternosRedondeados +
+      totalCargos
+    )
 
     return {
       lineas: lineasCalculadas,
@@ -293,7 +325,7 @@ export function FacturaForm({ proveedores, empresas, productos, formasPago }: Pr
 
       <DatosComprobante proveedores={proveedores} empresas={empresas} proveedorId={proveedorId} setProveedorId={setProveedorId} numero={numeroFactura} setNumero={setNumeroFactura} fecha={fecha} setFecha={setFecha} fechaVencimiento={fechaVencimiento} setFechaVencimiento={setFechaVencimiento} />
       <ProductosFactura productos={productosDisponibles} lineas={calculo.lineas} agregarLinea={agregarLinea} quitarLinea={quitarLinea} actualizarLinea={actualizarLinea} actualizarProductoDeLinea={actualizarProductoDeLinea} crearProductoDesdeLinea={crearProductoDesdeLinea} />
-      <ImpuestosFactura subtotal={calculo.subtotalNeto} descuentos={calculo.descuentos} iva={calculo.iva} cargos={cargos} total={calculo.total} />
+      <ImpuestosFactura subtotal={calculo.subtotalNeto} descuentos={calculo.descuentos} iva={calculo.iva} impuestosInternos={calculo.impuestosInternos} cargos={cargos} total={calculo.total} />
       <PagoFactura pagarAlCargar={pagarAlCargar} setPagarAlCargar={setPagarAlCargar} montoPagoMostrado={montoPagoMostrado} setMontoPago={setMontoPago} setPagoTocado={setPagoTocado} total={calculo.total} formasPago={formasPago} />
 
       <button type="submit" disabled={lineas.length === 0} className="rounded-lg bg-black px-5 py-2 text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
