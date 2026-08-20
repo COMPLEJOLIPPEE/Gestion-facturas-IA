@@ -19,7 +19,6 @@ type ItemInput = {
 
 export async function crearRemito(formData: FormData) {
   const supabase = await createClient()
-
   const itemsRaw = formData.get("items") as string
   const items: ItemInput[] = JSON.parse(itemsRaw || "[]")
 
@@ -39,9 +38,7 @@ export async function crearRemito(formData: FormData) {
       descuento_importe: descuento,
       bonificacion_importe: bonificacion,
       precio_neto_unitario:
-        Number(item.cantidad ?? 0) > 0
-          ? neto / Number(item.cantidad)
-          : 0,
+        Number(item.cantidad ?? 0) > 0 ? neto / Number(item.cantidad) : 0,
       subtotal_neto: neto,
       precio_final: neto,
     }
@@ -57,6 +54,7 @@ export async function crearRemito(formData: FormData) {
     .insert({
       numero: (formData.get("numero") as string) || null,
       fecha: formData.get("fecha") as string,
+      fecha_vencimiento: (formData.get("fecha_vencimiento") as string) || null,
       proveedor_id: formData.get("proveedor_id") as string,
       empresa_id: formData.get("empresa_id") as string,
       monto_total: total,
