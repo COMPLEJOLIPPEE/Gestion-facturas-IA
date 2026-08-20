@@ -12,39 +12,73 @@ export type ProductoSistema = {
 
 export type LineaProcesada = {
   producto_id: string;
-
   cantidad: number;
-
   precio_unitario: number;
-
   iva: number;
-
   descuento: number;
-
   precio_final: number;
-
-  descripcionLeida: string;
-
+  bonificacion?: number;
+  cantidad_bonificada?: number;
+  cantidad_bonificada_detalle?: number;
+  tipo_bonificacion?: "cantidad" | "importe" | "porcentaje";
+  precio_bruto_unitario?: number;
+  precio_neto?: number;
+  subtotal_neto?: number;
+  iva_importe?: number;
+  impuestos_internos?: number;
   codigo_proveedor?: string;
-
+  descripcionLeida: string;
   autoMatcheado: boolean;
-
   score: number;
-
   confianza: "alta" | "media" | "baja";
-
   motivo: string;
-
   fuente: "alias" | "smartmatch" | "manual";
-
-  // -----------------------------------------
-  // Sugerencia de SmartMatch
-  // -----------------------------------------
-
   producto_sugerido_id?: string;
-
   producto_sugerido_nombre?: string;
 };
+
+function datosFinancieros(linea: LineaIA) {
+  return {
+    bonificacion:
+      linea.bonificacion != null
+        ? Math.abs(linea.bonificacion)
+        : undefined,
+    cantidad_bonificada:
+      linea.cantidad_bonificada != null
+        ? Math.max(0, linea.cantidad_bonificada)
+        : undefined,
+    cantidad_bonificada_detalle:
+      linea.cantidad_bonificada_detalle != null
+        ? Math.max(0, linea.cantidad_bonificada_detalle)
+        : undefined,
+    tipo_bonificacion:
+      linea.tipo_bonificacion === "cantidad" ||
+      linea.tipo_bonificacion === "importe" ||
+      linea.tipo_bonificacion === "porcentaje"
+        ? linea.tipo_bonificacion
+        : undefined,
+    precio_bruto_unitario:
+      linea.precio_bruto_unitario != null
+        ? Math.abs(linea.precio_bruto_unitario)
+        : undefined,
+    precio_neto:
+      linea.precio_neto != null
+        ? Math.abs(linea.precio_neto)
+        : undefined,
+    subtotal_neto:
+      linea.subtotal_neto != null
+        ? Math.abs(linea.subtotal_neto)
+        : undefined,
+    iva_importe:
+      linea.iva_importe != null
+        ? Math.abs(linea.iva_importe)
+        : undefined,
+    impuestos_internos:
+      linea.impuestos_internos != null
+        ? Math.abs(linea.impuestos_internos)
+        : undefined,
+  };
+}
 
 export async function procesarLineasIA(
   supabase: SupabaseClient,
@@ -56,225 +90,88 @@ export async function procesarLineasIA(
 
   for (const linea of lineasIA) {
     const iva = linea.iva ?? 21;
-
-    const descuento = linea.descuento ?? 0;
-
-    const subtotal =
-      linea.cantidad * linea.precio_unitario;
-
+    const descuento = Math.abs(linea.descuento ?? 0);
+    const subtotal = linea.cantidad * Math.abs(linea.precio_unitario);
     const precioFinal =
-      linea.precio_final ??
-      (subtotal - descuento);
+      linea.precio_final != null
+        ? Math.abs(linea.precio_final)
+        : linea.subtotal_neto != null
+          ? Math.abs(linea.subtotal_neto)
+          : Math.max(0, subtotal - descuento);
 
-    // -----------------------------------------
-    // 1. Buscar alias del proveedor
-    // -----------------------------------------
+    const financieros = datosFinancieros(linea);
 
-   const alias = proveedorId
-  ? await buscarAlias(
-      supabase,
-      proveedorId,
-      linea.descripcion,
-      linea.codigo_proveedor
-    )
-  : null;
+    const alias = proveedorId
+      ? await buscarAlias(
+          supabase,
+          proveedorId,
+          linea.descripcion,
+          linea.codigo_proveedor
+        )
+      : null;
+
+    const base = {
+      cantidad: linea.cantidad,
+      precio_unitario: Math.abs(linea.precio_unitario),
+      iva,
+      descuento,
+      precio_final: precioFinal,
+      ...financieros,
+      descripcionLeida: linea.descripcion,
+      codigo_proveedor: linea.codigo_proveedor ?? undefined,
+    };
+
     if (alias) {
       resultado.push({
-        producto_id:
-          alias.producto_id,
-
-        cantidad:
-          linea.cantidad,
-
-        precio_unitario:
-          linea.precio_unitario,
-
-        iva,
-
-        descuento,
-
-        precio_final:
-          precioFinal,
-
-        descripcionLeida:
-          linea.descripcion,
-
-        codigo_proveedor:
-          linea.codigo_proveedor ?? undefined,
-
+        ...base,
+        producto_id: alias.producto_id,
         autoMatcheado: true,
-
         score: 100,
-
         confianza: "alta",
-
-        motivo:
-          "Producto reconocido mediante historial del proveedor.",
-
+        motivo: "Producto reconocido mediante historial del proveedor.",
         fuente: "alias",
       });
-
       continue;
     }
 
-    // -----------------------------------------
-    // 2. SmartMatch
-    // -----------------------------------------
+    const match = smartMatch(linea.descripcion, productos);
 
-    const match = smartMatch(
-      linea.descripcion,
-      productos
-    );
-
-    // -----------------------------------------
-    // 3. ALTA CONFIANZA
-    // -----------------------------------------
-    // Se selecciona automáticamente.
-    // -----------------------------------------
-
-    if (
-      match.confianza === "alta" &&
-      match.producto
-    ) {
+    if (match.confianza === "alta" && match.producto) {
       resultado.push({
-        producto_id:
-          match.producto.id,
-
-        cantidad:
-          linea.cantidad,
-
-        precio_unitario:
-          linea.precio_unitario,
-
-        iva,
-
-        descuento,
-
-        precio_final:
-          precioFinal,
-
-        descripcionLeida:
-          linea.descripcion,
-
-        codigo_proveedor:
-          linea.codigo_proveedor ?? undefined,
-
+        ...base,
+        producto_id: match.producto.id,
         autoMatcheado: true,
-
-        score:
-          match.score,
-
-        confianza:
-          "alta",
-
-        motivo:
-          match.motivo,
-
-        fuente:
-          "smartmatch",
+        score: match.score,
+        confianza: "alta",
+        motivo: match.motivo,
+        fuente: "smartmatch",
       });
-
       continue;
     }
 
-    // -----------------------------------------
-    // 4. CONFIANZA MEDIA
-    // -----------------------------------------
-    // NO seleccionamos automáticamente.
-    // Guardamos el producto como sugerencia.
-    // -----------------------------------------
-
-    if (
-      match.confianza === "media" &&
-      match.producto
-    ) {
+    if (match.confianza === "media" && match.producto) {
       resultado.push({
+        ...base,
         producto_id: "",
-
-        cantidad:
-          linea.cantidad,
-
-        precio_unitario:
-          linea.precio_unitario,
-
-        iva,
-
-        descuento,
-
-        precio_final:
-          precioFinal,
-
-        descripcionLeida:
-          linea.descripcion,
-
-        codigo_proveedor:
-          linea.codigo_proveedor ?? undefined,
-
         autoMatcheado: false,
-
-        score:
-          match.score,
-
-        confianza:
-          "media",
-
-        motivo:
-          match.motivo,
-
-        fuente:
-          "smartmatch",
-
-        producto_sugerido_id:
-          match.producto.id,
-
-        producto_sugerido_nombre:
-          match.producto.nombre,
+        score: match.score,
+        confianza: "media",
+        motivo: match.motivo,
+        fuente: "smartmatch",
+        producto_sugerido_id: match.producto.id,
+        producto_sugerido_nombre: match.producto.nombre,
       });
-
       continue;
     }
-
-    // -----------------------------------------
-    // 5. CONFIANZA BAJA
-    // -----------------------------------------
-    // No asignamos ni sugerimos producto.
-    // -----------------------------------------
 
     resultado.push({
+      ...base,
       producto_id: "",
-
-      cantidad:
-        linea.cantidad,
-
-      precio_unitario:
-        linea.precio_unitario,
-
-      iva,
-
-      descuento,
-
-      precio_final:
-        precioFinal,
-
-      descripcionLeida:
-        linea.descripcion,
-
-      codigo_proveedor:
-        linea.codigo_proveedor ?? undefined,
-
       autoMatcheado: false,
-
-      score:
-        match.score,
-
-      confianza:
-        "baja",
-
-      motivo:
-        match.motivo,
-
-      fuente:
-        "smartmatch",
+      score: match.score,
+      confianza: "baja",
+      motivo: match.motivo,
+      fuente: "smartmatch",
     });
   }
 
