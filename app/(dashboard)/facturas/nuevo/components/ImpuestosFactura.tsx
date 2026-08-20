@@ -41,24 +41,22 @@ export default function ImpuestosFactura({
           <span>${dinero(subtotal)}</span>
         </div>
 
-        {descuentos > 0 && (
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-500">Descuentos y bonificaciones</span>
-            <span className="text-red-600">-${dinero(descuentos)}</span>
-          </div>
-        )}
+        <div className="flex justify-between text-sm">
+          <span className="text-gray-500">Descuentos y bonificaciones</span>
+          <span className={descuentos > 0 ? "text-red-600" : "text-gray-700"}>
+            -${dinero(descuentos)}
+          </span>
+        </div>
 
         <div className="flex justify-between text-sm">
           <span className="text-gray-500">IVA</span>
           <span>${dinero(iva)}</span>
         </div>
 
-        {impuestosInternos > 0 && (
-          <div className="flex justify-between text-sm">
-            <span className="text-gray-500">Impuestos internos</span>
-            <span>${dinero(impuestosInternos)}</span>
-          </div>
-        )}
+        <div className="flex justify-between text-sm">
+          <span className="text-gray-500">Impuestos internos</span>
+          <span>${dinero(impuestosInternos)}</span>
+        </div>
 
         {cargos.length > 0 && (
           <div className="mt-2 border-t pt-3">
