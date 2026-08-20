@@ -7,7 +7,7 @@ import DatosComprobante from "./components/DatosComprobante"
 import ProductosFactura, { LineaFactura } from "./components/ProductosFactura"
 import ImpuestosFactura from "./components/ImpuestosFactura"
 import PagoFactura from "./components/PagoFactura"
-import { leerFacturaConIA, procesarLineasFacturaConIA, usarOCRParaFactura } from "@/lib/ai/actions"
+import { leerFacturaConIA, procesarLineasFacturaConIA, usarGPTParaFactura } from "@/lib/ai/actions"
 
 type Proveedor = { id: string; nombre_fantasia: string }
 type Empresa = { id: string; razon_social: string }
@@ -239,18 +239,26 @@ export function FacturaForm({ proveedores, empresas, productos, formasPago }: Pr
     }
   }
 
-  async function autorizarOCR() {
+  async function autorizarGPT() {
     if (!fallbackIA) return
 
     setLeyendoIA(true)
     setErrorIA(null)
 
     try {
-      const datos = await usarOCRParaFactura(fallbackIA.base64, fallbackIA.mimeType, fallbackIA.logId)
+      const datos = await usarGPTParaFactura(
+        fallbackIA.base64,
+        fallbackIA.mimeType,
+        fallbackIA.logId
+      )
       await aplicarDatosFacturaIA(datos)
       setFallbackIA(null)
     } catch (error) {
-      setErrorIA(error instanceof Error ? error.message : "No se pudo procesar el documento con OCR.space.")
+      setErrorIA(
+        error instanceof Error
+          ? error.message
+          : "No se pudo procesar el documento con GPT-4o-mini."
+      )
     } finally {
       setLeyendoIA(false)
     }
@@ -271,10 +279,10 @@ export function FacturaForm({ proveedores, empresas, productos, formasPago }: Pr
             <h3 className="text-base font-semibold text-amber-900">⚠️ Gemini no pudo procesar el documento</h3>
             <p className="mt-1 text-sm text-amber-800">{fallbackIA.mensaje}</p>
           </div>
-          <p className="mb-4 text-sm text-gray-700">Podés intentar procesarlo con <strong>OCR.space</strong> como alternativa.</p>
+          <p className="mb-4 text-sm text-gray-700">Podés intentar procesarlo con <strong>GPT-4o-mini</strong> como alternativa.</p>
           <div className="flex gap-3">
-            <button type="button" onClick={autorizarOCR} disabled={leyendoIA} className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50">
-              {leyendoIA ? "Procesando con OCR..." : "Usar OCR.space"}
+            <button type="button" onClick={autorizarGPT} disabled={leyendoIA} className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50">
+              {leyendoIA ? "Procesando con GPT..." : "Usar GPT-4o-mini"}
             </button>
             <button type="button" onClick={() => { setFallbackIA(null); setErrorIA(null) }} disabled={leyendoIA} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50">
               Cancelar
