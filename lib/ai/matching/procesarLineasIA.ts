@@ -37,32 +37,58 @@ export type LineaProcesada = {
   producto_sugerido_nombre?: string;
 };
 
-function datosFinancieros(
-  linea: LineaIA
-): Pick<
-  LineaProcesada,
-  | "bonificacion"
-  | "cantidad_bonificada"
-  | "cantidad_bonificada_detalle"
-  | "tipo_bonificacion"
-  | "precio_bruto_unitario"
-  | "precio_neto"
-  | "subtotal_neto"
-  | "iva_importe"
-  | "impuestos_internos"
-> {
+function datosFinancieros(linea: LineaIA) {
+  const precioBrutoUnitario =
+    linea.precio_bruto_unitario != null
+      ? Math.abs(Number(linea.precio_bruto_unitario))
+      : Math.abs(Number(linea.precio_unitario ?? 0));
+
+  const cantidad = Math.max(0, Number(linea.cantidad ?? 0));
+  const descuento = Math.abs(Number(linea.descuento ?? 0));
+  const bonificacion =
+    linea.bonificacion != null
+      ? Math.abs(Number(linea.bonificacion))
+      : 0;
+
+  const cantidadBonificada = Math.max(
+    0,
+    Number(linea.cantidad_bonificada ?? linea.cantidad_bonificada_detalle ?? 0)
+  );
+
+  const bonificacionCantidad =
+    linea.tipo_bonificacion === "cantidad"
+      ? cantidadBonificada * precioBrutoUnitario
+      : 0;
+
+  const subtotalCalculado = Math.max(
+    0,
+    cantidad * precioBrutoUnitario - descuento - bonificacion - bonificacionCantidad
+  );
+
+  const subtotalNeto =
+    linea.subtotal_neto != null
+      ? Math.abs(Number(linea.subtotal_neto))
+      : subtotalCalculado;
+
+  const precioNeto =
+    linea.precio_neto != null
+      ? Math.abs(Number(linea.precio_neto))
+      : cantidad > 0
+        ? subtotalNeto / cantidad
+        : 0;
+
+  const iva = Number(linea.iva ?? 21);
+  const ivaImporte =
+    linea.iva_importe != null
+      ? Math.abs(Number(linea.iva_importe))
+      : subtotalNeto * (iva / 100);
+
   return {
-    bonificacion:
-      linea.bonificacion != null
-        ? Math.abs(linea.bonificacion)
-        : undefined,
-    cantidad_bonificada:
-      linea.cantidad_bonificada != null
-        ? Math.max(0, linea.cantidad_bonificada)
-        : undefined,
+    bonificacion: bonificacion || undefined,
+    cantidad_bonificada: cantidadBonificada || undefined,
     cantidad_bonificada_detalle:
       linea.cantidad_bonificada_detalle != null
-        ? Math.max(0, linea.cantidad_bonificada_detalle)
+        ? Math.max(0, Number(linea.cantidad_bonificada_detalle))
         : undefined,
     tipo_bonificacion:
       linea.tipo_bonificacion === "cantidad" ||
@@ -70,26 +96,14 @@ function datosFinancieros(
       linea.tipo_bonificacion === "porcentaje"
         ? linea.tipo_bonificacion
         : undefined,
-    precio_bruto_unitario:
-      linea.precio_bruto_unitario != null
-        ? Math.abs(linea.precio_bruto_unitario)
-        : undefined,
-    precio_neto:
-      linea.precio_neto != null
-        ? Math.abs(linea.precio_neto)
-        : undefined,
-    subtotal_neto:
-      linea.subtotal_neto != null
-        ? Math.abs(linea.subtotal_neto)
-        : undefined,
-    iva_importe:
-      linea.iva_importe != null
-        ? Math.abs(linea.iva_importe)
-        : undefined,
+    precio_bruto_unitario: precioBrutoUnitario,
+    precio_neto: precioNeto,
+    subtotal_neto: subtotalNeto,
+    iva_importe: Math.abs(ivaImporte),
     impuestos_internos:
       linea.impuestos_internos != null
-        ? Math.abs(linea.impuestos_internos)
-        : undefined,
+        ? Math.abs(Number(linea.impuestos_internos))
+        : 0,
   };
 }
 
@@ -102,17 +116,26 @@ export async function procesarLineasIA(
   const resultado: LineaProcesada[] = [];
 
   for (const linea of lineasIA) {
-    const iva = linea.iva ?? 21;
-    const descuento = Math.abs(linea.descuento ?? 0);
-    const subtotal = linea.cantidad * Math.abs(linea.precio_unitario);
+    // Las líneas de descuento son conceptos financieros, no productos.
+    if (
+      linea.tipo_linea === "descuento_linea" ||
+      linea.tipo_linea === "descuento_agrupado"
+    ) {
+      continue;
+    }
+
+    const iva = linea.iva != null ? Number(linea.iva) : 21;
+    const precioUnitario =
+      linea.precio_bruto_unitario != null
+        ? Math.abs(Number(linea.precio_bruto_unitario))
+        : Math.abs(Number(linea.precio_unitario ?? 0));
+    const descuento = Math.abs(Number(linea.descuento ?? 0));
+    const financieros = datosFinancieros(linea);
+
     const precioFinal =
       linea.precio_final != null
-        ? Math.abs(linea.precio_final)
-        : linea.subtotal_neto != null
-          ? Math.abs(linea.subtotal_neto)
-          : Math.max(0, subtotal - descuento);
-
-    const financieros = datosFinancieros(linea);
+        ? Math.abs(Number(linea.precio_final))
+        : financieros.precio_neto ?? 0;
 
     const alias = proveedorId
       ? await buscarAlias(
@@ -124,8 +147,8 @@ export async function procesarLineasIA(
       : null;
 
     const base = {
-      cantidad: linea.cantidad,
-      precio_unitario: Math.abs(linea.precio_unitario),
+      cantidad: Math.max(0, Number(linea.cantidad ?? 0)),
+      precio_unitario: precioUnitario,
       iva,
       descuento,
       precio_final: precioFinal,
