@@ -4,7 +4,7 @@ import { createClient } from "@/lib/supabase/server"
 
 import {
   extraerComprobante,
-  procesarConOCRAutorizado,
+  procesarConOpenAIAutorizado,
   GeminiFallbackRequiredError,
 } from "./extraer-comprobante"
 
@@ -17,7 +17,7 @@ import type {
 /**
  * Lee una factura utilizando Gemini.
  *
- * Si Gemini falla, NO utiliza OCR automáticamente.
+ * Si Gemini falla, NO utiliza GPT automáticamente.
  * Se lanza un error especial que contiene el ID
  * del log para que la interfaz pueda pedir autorización.
  */
@@ -25,21 +25,14 @@ export async function leerFacturaConIA(
   base64: string,
   mimeType: string
 ): Promise<ComprobanteExtraido> {
-
   try {
-
     return await extraerComprobante(
       base64,
       mimeType,
       "factura"
     )
-
   } catch (error) {
-
-    if (
-      error instanceof GeminiFallbackRequiredError
-    ) {
-
+    if (error instanceof GeminiFallbackRequiredError) {
       throw new Error(
         `GEMINI_FALLBACK_REQUIRED|${error.logId ?? ""}|${error.message}`
       )
@@ -52,27 +45,20 @@ export async function leerFacturaConIA(
 /**
  * Lee un remito utilizando Gemini.
  *
- * Si Gemini falla, tampoco utiliza OCR automáticamente.
+ * Si Gemini falla, tampoco utiliza GPT automáticamente.
  */
 export async function leerRemitoConIA(
   base64: string,
   mimeType: string
 ): Promise<ComprobanteExtraido> {
-
   try {
-
     return await extraerComprobante(
       base64,
       mimeType,
       "remito"
     )
-
   } catch (error) {
-
-    if (
-      error instanceof GeminiFallbackRequiredError
-    ) {
-
+    if (error instanceof GeminiFallbackRequiredError) {
       throw new Error(
         `GEMINI_FALLBACK_REQUIRED|${error.logId ?? ""}|${error.message}`
       )
@@ -82,10 +68,6 @@ export async function leerRemitoConIA(
   }
 }
 
-/**
- * Procesa las líneas extraídas y busca
- * coincidencias con los productos existentes.
- */
 export async function procesarLineasFacturaConIA(
   proveedorId: string | null,
   lineas: ComprobanteExtraido["lineas"],
@@ -94,7 +76,6 @@ export async function procesarLineasFacturaConIA(
     nombre: string
   }[]
 ) {
-
   const supabase = await createClient()
 
   return procesarLineasIA(
@@ -106,16 +87,15 @@ export async function procesarLineasFacturaConIA(
 }
 
 /**
- * Ejecuta OCR.space solamente después
+ * Ejecuta GPT-4o-mini solamente después
  * de que el usuario haya autorizado el fallback.
  */
-export async function usarOCRParaFactura(
+export async function usarGPTParaFactura(
   base64: string,
   mimeType: string,
   logId: string | null
 ): Promise<ComprobanteExtraido> {
-
-  return procesarConOCRAutorizado(
+  return procesarConOpenAIAutorizado(
     base64,
     mimeType,
     "factura",
@@ -124,16 +104,15 @@ export async function usarOCRParaFactura(
 }
 
 /**
- * Ejecuta OCR.space para un remito solamente
+ * Ejecuta GPT-4o-mini para un remito solamente
  * después de autorización del usuario.
  */
-export async function usarOCRParaRemito(
+export async function usarGPTParaRemito(
   base64: string,
   mimeType: string,
   logId: string | null
 ): Promise<ComprobanteExtraido> {
-
-  return procesarConOCRAutorizado(
+  return procesarConOpenAIAutorizado(
     base64,
     mimeType,
     "remito",
