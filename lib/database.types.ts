@@ -91,6 +91,38 @@ export type Database = {
           },
         ]
       }
+      usuario_empresa: {
+  Row: {
+    id: string
+    usuario_id: string
+    empresa_id: string
+    activo: boolean
+    created_at: string
+  }
+  Insert: {
+    id?: string
+    usuario_id: string
+    empresa_id: string
+    activo?: boolean
+    created_at?: string
+  }
+  Update: {
+    id?: string
+    usuario_id?: string
+    empresa_id?: string
+    activo?: boolean
+    created_at?: string
+  }
+  Relationships: [
+    {
+      foreignKeyName: "usuario_empresa_empresa_id_fkey"
+      columns: ["empresa_id"]
+      isOneToOne: false
+      referencedRelation: "empresas"
+      referencedColumns: ["id"]
+    },
+  ]
+},
       empresas: {
         Row: {
           created_at: string | null
