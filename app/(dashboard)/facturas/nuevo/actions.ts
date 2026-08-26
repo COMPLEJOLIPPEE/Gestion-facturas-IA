@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { registrarPago } from "@/lib/pagos"
+import { cookies } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
@@ -32,8 +33,42 @@ function numero(valor: unknown) {
 
 function redondear(valor: number) { return Number(valor.toFixed(2)) }
 
+const EMPRESA_COOKIE = "factura_ia_empresa_activa"
+
 export async function crearFactura(formData: FormData) {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  // La empresa activa se toma del servidor, no del formulario.
+  // El cliente no puede elegir un empresa_id distinto para crear la factura.
+  const cookieStore = await cookies()
+  let empresaId = cookieStore.get(EMPRESA_COOKIE)?.value ?? null
+
+  if (!empresaId) {
+    const { data: primerAcceso } = await supabase
+      .from("usuario_empresa")
+      .select("empresa_id")
+      .eq("usuario_id", user.id)
+      .eq("activo", true)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    empresaId = primerAcceso?.empresa_id ?? null
+  }
+
+  if (!empresaId) throw new Error("No hay una empresa activa configurada para este usuario.")
+
+  const { data: accesoEmpresa } = await supabase
+    .from("usuario_empresa")
+    .select("empresa_id")
+    .eq("usuario_id", user.id)
+    .eq("empresa_id", empresaId)
+    .eq("activo", true)
+    .maybeSingle()
+
+  if (!accesoEmpresa) throw new Error("No tenés acceso a la empresa seleccionada.")
+
   const items: ItemInput[] = JSON.parse(String(formData.get("items") ?? "[]"))
 
   if (!items.length) throw new Error("La factura necesita al menos una línea de producto")
@@ -48,7 +83,7 @@ export async function crearFactura(formData: FormData) {
     fecha: formData.get("fecha") as string,
     fecha_vencimiento: (formData.get("fecha_vencimiento") as string) || null,
     proveedor_id: formData.get("proveedor_id") as string,
-    empresa_id: formData.get("empresa_id") as string,
+    empresa_id: empresaId,
     subtotal,
     iva,
     total,
