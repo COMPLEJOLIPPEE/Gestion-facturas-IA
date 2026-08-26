@@ -36,7 +36,14 @@ export default function LoginPage() {
               placeholder="********"
             />
           </div>
-
+<div className="text-right">
+  <a
+    href="/forgot-password"
+    className="text-sm text-blue-600 hover:underline"
+  >
+    ¿Olvidaste tu contraseña?
+  </a>
+</div>
           <button
             type="submit"
             className="w-full rounded bg-black p-2 text-white hover:opacity-80"
