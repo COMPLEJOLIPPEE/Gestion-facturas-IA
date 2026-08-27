@@ -47,9 +47,28 @@ export function FacturaForm({ proveedores, empresas, empresaActivaId, productos,
   const [montoPago, setMontoPago] = useState(0)
   const [pagoTocado, setPagoTocado] = useState(false)
 
-  const agregarLinea = () => setLineas((prev) => [...prev, { producto_id: "", cantidad: 1, precio_unitario: 0, iva: 21, descuento: 0, precio_final: 0, precio_neto: 0, subtotal_neto: 0, impuestos_internos: 0, iva_importe: 0, bonificacion: 0, cantidad_bonificada: 0 }])
+  const agregarLinea = () => setLineas((prev) => [...prev, { producto_id: "", cantidad: 1, precio_unitario: 0, iva: 21, descuento: 0, precio_final: 0, bonificacion: 0, cantidad_bonificada: 0, tipo_bonificacion: "importe", precio_bruto_unitario: 0, precio_neto: 0, subtotal_neto: 0, impuestos_internos: 0, iva_importe: 0 }])
   const quitarLinea = (index: number) => setLineas((prev) => prev.filter((_, i) => i !== index))
-  const actualizarLinea = (index: number, campo: keyof LineaFactura, valor: string | number) => setLineas((prev) => prev.map((linea, i) => i === index ? { ...linea, [campo]: valor } : linea))
+  const actualizarLinea = (index: number, campo: keyof LineaFactura, valor: string | number) => setLineas((prev) => prev.map((linea, i) => {
+    if (i !== index) return linea
+    const siguiente = { ...linea, [campo]: valor }
+    if (campo === "cantidad" || campo === "precio_unitario" || campo === "precio_bruto_unitario" || campo === "descuento" || campo === "bonificacion" || campo === "cantidad_bonificada" || campo === "cantidad_bonificada_detalle" || campo === "tipo_bonificacion" || campo === "iva") {
+      const cantidad = Math.max(0, numero(campo === "cantidad" ? valor : siguiente.cantidad))
+      const precioUnitario = Math.abs(numero(campo === "precio_unitario" ? valor : siguiente.precio_unitario))
+      const precioBrutoUnitario = Math.abs(numero(campo === "precio_bruto_unitario" ? valor : siguiente.precio_bruto_unitario ?? precioUnitario))
+      const descuento = Math.abs(numero(campo === "descuento" ? valor : siguiente.descuento))
+      const bonificacion = Math.abs(numero(campo === "bonificacion" ? valor : siguiente.bonificacion))
+      const cantidadBonificada = Math.min(Math.max(0, numero(campo === "cantidad_bonificada" ? valor : siguiente.cantidad_bonificada ?? siguiente.cantidad_bonificada_detalle)), cantidad)
+      const bonificacionPorCantidad = (campo === "tipo_bonificacion" ? valor : siguiente.tipo_bonificacion) === "cantidad"
+      const bonificacionImporte = bonificacionPorCantidad ? cantidadBonificada * precioUnitario : bonificacion
+      const subtotalNeto = Math.max(0, cantidad * precioBrutoUnitario - descuento - bonificacionImporte)
+      const precioNeto = cantidad > 0 ? subtotalNeto / cantidad : 0
+      const tasaIVA = numero(campo === "iva" ? valor : siguiente.iva)
+      const ivaImporte = subtotalNeto * (tasaIVA / 100)
+      return { ...siguiente, cantidad, precio_unitario: precioUnitario, precio_bruto_unitario: precioBrutoUnitario, descuento, bonificacion, cantidad_bonificada: cantidadBonificada, precio_neto: redondear(precioNeto), subtotal_neto: redondear(subtotalNeto), iva_importe: redondear(ivaImporte), precio_final: redondear(precioNeto) }
+    }
+    return siguiente
+  }))
   const actualizarProductoDeLinea = (index: number, productoId: string) => setLineas((prev) => prev.map((linea, i) => i === index ? { ...linea, producto_id: productoId } : linea))
 
   const crearProductoDesdeLinea = async (index: number, nombre: string, costo: number, iva: number) => {
@@ -84,13 +103,14 @@ export function FacturaForm({ proveedores, empresas, empresaActivaId, productos,
       const bonificacionPorCantidad = linea.tipo_bonificacion === "cantidad"
       const bonificacionImporte = bonificacionPorCantidad ? cantidadBonificada * precioUnitario : bonificacion
       const subtotalNetoCalculado = Math.max(0, bruto - descuento - bonificacionImporte)
-      const subtotalNetoExtraido = linea.subtotal_neto != null ? Math.abs(numero(linea.subtotal_neto)) : null
+      const subtotalNetoExtraido = linea.subtotal_neto != null && numero(linea.subtotal_neto) !== 0 ? Math.abs(numero(linea.subtotal_neto)) : null
       const subtotalNeto = subtotalNetoExtraido ?? subtotalNetoCalculado
-      const precioNeto = linea.precio_neto != null ? Math.abs(numero(linea.precio_neto)) : cantidad > 0 ? subtotalNeto / cantidad : 0
+      const precioNeto = cantidad > 0 ? subtotalNeto / cantidad : 0
       const tasaIVA = numero(linea.iva)
-      const ivaImporte = linea.iva_importe != null ? Math.abs(numero(linea.iva_importe)) : subtotalNeto * (tasaIVA / 100)
+      const ivaImporteExtraido = linea.iva_importe != null && numero(linea.iva_importe) !== 0 ? Math.abs(numero(linea.iva_importe)) : null
+      const ivaImporte = ivaImporteExtraido ?? subtotalNeto * (tasaIVA / 100)
       const impuestosInternos = Math.abs(numero(linea.impuestos_internos))
-      return { ...linea, cantidad, precio_unitario: precioUnitario, descuento, bonificacion, cantidad_bonificada: cantidadBonificada, precio_neto: redondear(precioNeto), precio_final: redondear(linea.precio_final != null ? Math.abs(numero(linea.precio_final)) : precioNeto), subtotal_neto: redondear(subtotalNeto), iva_importe: redondear(ivaImporte), impuestos_internos: redondear(impuestosInternos), _bruto: bruto, _descuentoTotal: descuento + bonificacionImporte }
+      return { ...linea, cantidad, precio_unitario: precioUnitario, descuento, bonificacion, cantidad_bonificada: cantidadBonificada, precio_neto: redondear(precioNeto), precio_final: redondear(precioNeto), subtotal_neto: redondear(subtotalNeto), iva_importe: redondear(ivaImporte), impuestos_internos: redondear(impuestosInternos), _bruto: bruto, _descuentoTotal: descuento + bonificacionImporte }
     })
     const resumen = lineasCalculadas.reduce((acumulado, linea) => ({ subtotalBruto: acumulado.subtotalBruto + linea._bruto, descuentos: acumulado.descuentos + linea._descuentoTotal, subtotalNeto: acumulado.subtotalNeto + linea.subtotal_neto, iva: acumulado.iva + linea.iva_importe, impuestosInternos: acumulado.impuestosInternos + linea.impuestos_internos }), { subtotalBruto: 0, descuentos: 0, subtotalNeto: 0, iva: 0, impuestosInternos: 0 })
     const totalCargos = cargos.reduce((acumulado, cargo) => acumulado + Math.abs(numero(cargo.importe)), 0)
