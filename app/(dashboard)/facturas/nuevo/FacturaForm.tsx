@@ -18,6 +18,39 @@ function numero(valor: unknown) { const resultado = Number(valor ?? 0); return N
 function redondear(valor: number) { return Number(valor.toFixed(2)) }
 function diferencia(a: number | null, b: number) { return a == null ? 0 : Math.abs(a - b) }
 
+function inferirAjustesNegativos(lineas: LineaFactura[], subtotalOficial: number | null): LineaFactura[] {
+  if (subtotalOficial == null) return lineas
+  const subtotalActual = redondear(lineas.reduce((sum, linea) => sum + numero(linea.subtotal_neto), 0))
+  const diferenciaSubtotal = redondear(subtotalActual - subtotalOficial)
+  if (diferenciaSubtotal <= 0.5) return lineas
+
+  // Si la IA leyó como positivas varias líneas que en el comprobante son ajustes,
+  // invertirlas reduce el subtotal en 2 veces su importe. Usamos sólo líneas sin
+  // producto asignado para no tocar productos normales reconocidos.
+  const candidatas = lineas.filter((linea) => {
+    const bruto = numero(linea.subtotal_neto)
+    return !linea.producto_id && !linea.es_ajuste_negativo && linea.tipo_linea !== "ajuste" && bruto > 0
+  })
+  const sumaCandidatas = redondear(candidatas.reduce((sum, linea) => sum + numero(linea.subtotal_neto), 0))
+  const objetivo = diferenciaSubtotal / 2
+
+  // En este escenario los ajustes forman el conjunto completo de candidatas.
+  // Permitimos el margen habitual de redondeo del documento.
+  if (Math.abs(sumaCandidatas - objetivo) <= 1) {
+    const ids = new Set(candidatas)
+    return lineas.map((linea) => {
+      if (!ids.has(linea)) return linea
+      const cantidad = Math.max(1, numero(linea.cantidad ?? 1))
+      const precio = -Math.abs(numero(linea.precio_unitario))
+      const subtotal = -Math.abs(numero(linea.subtotal_neto))
+      const iva = redondear(subtotal * (numero(linea.iva ?? 21) / 100))
+      return { ...linea, tipo_linea: "ajuste", es_ajuste_negativo: true, producto_id: "", cantidad, precio_unitario: precio, precio_bruto_unitario: precio, precio_neto: redondear(subtotal / cantidad), subtotal_neto: subtotal, precio_final: redondear(subtotal / cantidad), descuento: 0, bonificacion: 0, iva_importe: iva, impuestos_internos: -Math.abs(numero(linea.impuestos_internos ?? 0)), autoMatcheado: false, score: 100, confianza: "alta", motivo: "Ajuste negativo inferido al conciliar las líneas con el subtotal oficial del comprobante.", fuente: "manual" }
+    })
+  }
+
+  return lineas
+}
+
 export function FacturaForm({ proveedores, empresas, empresaActivaId, productos, formasPago }: Props) {
   const [lineas, setLineas] = useState<LineaFactura[]>([])
   const [productosDisponibles, setProductosDisponibles] = useState<Producto[]>(productos)
@@ -55,7 +88,9 @@ export function FacturaForm({ proveedores, empresas, empresaActivaId, productos,
       const subtotalNeto = esAjusteNegativo ? bruto : Math.max(0, bruto - descuento - bonificacionImporte)
       const precioNeto = cantidad > 0 ? subtotalNeto / cantidad : 0
       const tasaIVA = numero(campo === "iva" ? valor : siguiente.iva)
-      const ivaImporte = esAjusteNegativo ? (siguiente.iva_importe != null ? numero(siguiente.iva_importe) : subtotalNeto * (tasaIVA / 100)) : subtotalNeto * (tasaIVA / 100)
+      // Para ajustes SIEMPRE recalculamos el IVA desde la base negativa.
+      // Nunca reutilizamos un iva_importe positivo que haya quedado de la IA.
+      const ivaImporte = esAjusteNegativo ? subtotalNeto * (tasaIVA / 100) : subtotalNeto * (tasaIVA / 100)
       return { ...siguiente, cantidad, precio_unitario: precioUnitario, precio_bruto_unitario: redondear(precioBrutoUnitario), descuento: esAjusteNegativo ? 0 : descuento, bonificacion: esAjusteNegativo ? 0 : bonificacion, cantidad_bonificada: cantidadBonificada, precio_neto: redondear(precioNeto), subtotal_neto: redondear(subtotalNeto), iva_importe: redondear(ivaImporte), precio_final: redondear(precioNeto) }
     }
     return siguiente
@@ -83,7 +118,7 @@ export function FacturaForm({ proveedores, empresas, empresaActivaId, productos,
       const subtotalNeto = esAjusteNegativo ? bruto : Math.max(0, bruto - descuento - bonificacionImporte)
       const precioNeto = cantidad > 0 ? subtotalNeto / cantidad : 0
       const tasaIVA = numero(linea.iva)
-      const ivaImporte = esAjusteNegativo ? numero(linea.iva_importe) : subtotalNeto * (tasaIVA / 100)
+      const ivaImporte = esAjusteNegativo ? subtotalNeto * (tasaIVA / 100) : (linea.iva_importe != null ? numero(linea.iva_importe) : subtotalNeto * (tasaIVA / 100))
       const impuestosInternos = numero(linea.impuestos_internos)
       return { ...linea, cantidad, precio_unitario: precioUnitario, precio_bruto_unitario: redondear(precioBrutoUnitario), descuento: esAjusteNegativo ? 0 : descuento, bonificacion: esAjusteNegativo ? 0 : bonificacion, cantidad_bonificada: cantidadBonificada, precio_neto: redondear(precioNeto), precio_final: redondear(precioNeto), subtotal_neto: redondear(subtotalNeto), iva_importe: redondear(ivaImporte), impuestos_internos: redondear(impuestosInternos), _bruto: bruto, _descuentoTotal: esAjusteNegativo ? Math.abs(bruto) : descuento + bonificacionImporte }
     })
@@ -106,12 +141,21 @@ export function FacturaForm({ proveedores, empresas, empresaActivaId, productos,
   const archivoABase64 = (file: File): Promise<string> => new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => resolve((reader.result as string).split(",")[1] ?? ""); reader.onerror = reject; reader.readAsDataURL(file) })
   async function aplicarDatosFacturaIA(datos: Awaited<ReturnType<typeof leerFacturaConIA>>) {
     setTotalesIA({ subtotalNeto: datos.subtotal_neto, ivaTotal: datos.iva_total, total: datos.total })
-    setCargos((datos.cargos ?? []).map((cargo) => ({ descripcion: cargo.descripcion, importe: numero(cargo.importe) }))); if (datos.numero) setNumeroFactura(datos.numero); if (datos.fecha) setFecha(datos.fecha); if (datos.fecha_vencimiento) setFechaVencimiento(datos.fecha_vencimiento)
+    const cargosBase = (datos.cargos ?? []).map((cargo) => ({ descripcion: cargo.descripcion, importe: numero(cargo.importe) }))
+    const tieneInternos = cargosBase.some((cargo) => /impuestos?\s+internos?/i.test(cargo.descripcion))
+    const impuestosInternos = numero(datos.impuestos_internos_total)
+    if (!tieneInternos && impuestosInternos !== 0) cargosBase.push({ descripcion: "Impuestos internos", importe: impuestosInternos })
+    setCargos(cargosBase)
+    if (datos.numero) setNumeroFactura(datos.numero); if (datos.fecha) setFecha(datos.fecha); if (datos.fecha_vencimiento) setFechaVencimiento(datos.fecha_vencimiento)
     let proveedorDetectadoId = proveedorId
     if (datos.proveedor_nombre) { const nombreIA = datos.proveedor_nombre.toLowerCase().trim(); const proveedorEncontrado = proveedores.find((p) => { const n = p.nombre_fantasia.toLowerCase().trim(); return n.includes(nombreIA) || nombreIA.includes(n) }); if (proveedorEncontrado) { proveedorDetectadoId = proveedorEncontrado.id; setProveedorId(proveedorEncontrado.id) } }
-    if (datos.lineas.length > 0) { const lineasProcesadas = await procesarLineasFacturaConIA(proveedorDetectadoId || null, datos.lineas, productos.map((p) => ({ id: p.id, nombre: p.nombre }))); setLineas(lineasProcesadas) }
+    if (datos.lineas.length > 0) {
+      let lineasProcesadas = await procesarLineasFacturaConIA(proveedorDetectadoId || null, datos.lineas, productos.map((p) => ({ id: p.id, nombre: p.nombre })))
+      lineasProcesadas = inferirAjustesNegativos(lineasProcesadas, datos.subtotal_neto)
+      setLineas(lineasProcesadas)
+    }
   }
   async function manejarArchivoIA(file: File) { setLeyendoIA(true); setErrorIA(null); setFallbackIA(null); setTotalesIA(null); try { const base64 = await archivoABase64(file); await aplicarDatosFacturaIA(await leerFacturaConIA(base64, file.type)) } catch (error) { const mensaje = error instanceof Error ? error.message : "No se pudo leer la factura."; if (mensaje.startsWith("GEMINI_FALLBACK_REQUIRED|")) { const partes = mensaje.split("|"); const logId = partes[1] || null; const motivo = partes.slice(2).join("|") || "Gemini no pudo procesar el documento."; try { const base64 = await archivoABase64(file); setFallbackIA({ base64, mimeType: file.type, logId, mensaje: motivo }); setErrorIA(null) } catch { setErrorIA("No se pudo preparar el documento para el procesamiento alternativo.") } } else setErrorIA(mensaje) } finally { setLeyendoIA(false); if (inputArchivoRef.current) inputArchivoRef.current.value = "" } }
   async function autorizarGPT() { if (!fallbackIA) return; setLeyendoIA(true); setErrorIA(null); setTotalesIA(null); try { const datos = await usarGPTParaFactura(fallbackIA.base64, fallbackIA.mimeType, fallbackIA.logId); await aplicarDatosFacturaIA(datos); setFallbackIA(null) } catch (error) { setErrorIA(error instanceof Error ? error.message : "No se pudo procesar el documento con GPT-4o-mini.") } finally { setLeyendoIA(false) } }
-  return (<form action={crearFactura} className="space-y-6"><input type="hidden" name="empresa_id" value={empresaActivaId ?? ""} /><input type="hidden" name="items" value={JSON.stringify(calculo.lineas)} /><input type="hidden" name="subtotal" value={calculo.subtotalNeto} /><input type="hidden" name="iva" value={calculo.iva} /><input type="hidden" name="total" value={calculo.total} /><input type="hidden" name="ia_subtotal_neto" value={totalesIA?.subtotalNeto ?? ""} /><input type="hidden" name="ia_iva_total" value={totalesIA?.ivaTotal ?? ""} /><input type="hidden" name="ia_total" value={totalesIA?.total ?? ""} /><input type="hidden" name="cargos" value={JSON.stringify(cargos)} /><CargaIA inputArchivoRef={inputArchivoRef} leyendoIA={leyendoIA} errorIA={errorIA} manejarArchivoIA={manejarArchivoIA} />{validacionIA && !validacionIA.ok && (<div className="rounded-xl border border-red-300 bg-red-50 p-5 text-sm text-red-800"><div className="font-semibold">⚠️ Los importes de las líneas no coinciden con los totales oficiales de la factura.</div><p className="mt-1">No conviene guardar esta factura todavía. Revisá las líneas y corregí los importes antes de continuar.</p><ul className="mt-2 list-disc pl-5"><li>Diferencia subtotal neto: ${validacionIA.subtotalDiff.toFixed(2)}</li><li>Diferencia IVA: ${validacionIA.ivaDiff.toFixed(2)}</li><li>Diferencia total: ${validacionIA.totalDiff.toFixed(2)}</li></ul></div>)}{validacionIA?.ok && (<div className="rounded-xl border border-green-300 bg-green-50 p-4 text-sm text-green-800">✓ Los totales calculados coinciden con los totales oficiales extraídos del comprobante.</div>)}{fallbackIA && (<div className="rounded-xl border border-amber-300 bg-amber-50 p-5"><div className="mb-3"><h3 className="text-base font-semibold text-amber-900">⚠️ Gemini no pudo procesar el documento</h3><p className="mt-1 text-sm text-amber-800">{fallbackIA.mensaje}</p></div><p className="mb-4 text-sm text-gray-700">Podés intentar procesarlo con <strong>GPT-4o-mini</strong> como alternativa.</p><div className="flex gap-3"><button type="button" onClick={autorizarGPT} disabled={leyendoIA} className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50">{leyendoIA ? "Procesando con GPT..." : "Usar GPT-4o-mini"}</button><button type="button" onClick={() => { setFallbackIA(null); setErrorIA(null) }} disabled={leyendoIA} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50">Cancelar</button></div></div>)}<DatosComprobante proveedores={proveedores} empresas={empresas} empresaActivaId={empresaActivaId} proveedorId={proveedorId} setProveedorId={setProveedorId} numero={numeroFactura} setNumero={setNumeroFactura} fecha={fecha} setFecha={setFecha} fechaVencimiento={fechaVencimiento} setFechaVencimiento={setFechaVencimiento} /><ProductosFactura productos={productosDisponibles} lineas={calculo.lineas} agregarLinea={agregarLinea} quitarLinea={quitarLinea} actualizarLinea={actualizarLinea} actualizarProductoDeLinea={actualizarProductoDeLinea} crearProductoDesdeLinea={crearProductoDesdeLinea} /><ImpuestosFactura subtotal={calculo.subtotalNeto} descuentos={calculo.descuentos} iva={calculo.iva} impuestosInternos={calculo.impuestosInternos} cargos={cargos} total={calculo.total} /><PagoFactura pagarAlCargar={pagarAlCargar} setPagarAlCargar={setPagarAlCargar} montoPagoMostrado={montoPagoMostrado} setMontoPago={setMontoPago} setPagoTocado={setPagoTocado} total={calculo.total} formasPago={formasPago} /><button type="submit" disabled={lineas.length === 0 || !empresaActivaId || validacionIA?.ok === false} className="rounded-lg bg-black px-5 py-2 text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">Guardar factura</button></form>)
+  return (<form action={crearFactura} className="space-y-6"><input type="hidden" name="empresa_id" value={empresaActivaId ?? ""} /><input type="hidden" name="items" value={JSON.stringify(calculo.lineas)} /><input type="hidden" name="subtotal" value={calculo.subtotalNeto} /><input type="hidden" name="iva" value={calculo.iva} /><input type="hidden" name="total" value={calculo.total} /><input type="hidden" name="ia_subtotal_neto" value={totalesIA?.subtotalNeto ?? ""} /><input type="hidden" name="ia_iva_total" value={totalesIA?.ivaTotal ?? ""} /><input type="hidden" name="ia_total" value={totalesIA?.total ?? ""} /><input type="hidden" name="cargos" value={JSON.stringify(cargos)} /><CargaIA inputArchivoRef={inputArchivoRef} leyendoIA={leyendoIA} errorIA={errorIA} manejarArchivoIA={manejarArchivoIA} />{validacionIA && !validacionIA.ok && (<div className="rounded-xl border border-red-300 bg-red-50 p-5 text-sm text-red-800"><div className="font-semibold">⚠️ Los importes de las líneas no coinciden con los totales oficiales de la factura.</div><p className="mt-1">No conviene guardar esta factura todavía. Revisá las líneas y corregí los importes antes de continuar.</p><ul className="mt-2 list-disc pl-5"><li>Diferencia subtotal neto: ${validacionIA.subtotalDiff.toFixed(2)}</li><li>Diferencia IVA: ${validacionIA.ivaDiff.toFixed(2)}</li><li>Diferencia total: ${validacionIA.totalDiff.toFixed(2)}</li></ul></div>)}{validacionIA?.ok && (<div className="rounded-xl border border-green-300 bg-green-50 p-4 text-sm text-green-800">✓ Los totales calculados coinciden con los totales oficiales extraídos del comprobante.</div>)}{fallbackIA && (<div className="rounded-xl border border-amber-300 bg-amber-50 p-5"><div className="mb-3"><h3 className="text-base font-semibold text-amber-900">⚠️ Gemini no pudo procesar el documento</h3><p className="mt-1 text-sm text-amber-800">{fallbackIA.mensaje}</p></div><p className="mb-4 text-sm text-gray-700">Podés intentar procesarlo con <strong>GPT-4o-mini</strong> como alternativa.</p><div className="flex gap-3"><button type="button" onClick={autorizarGPT} disabled={leyendoIA} className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50">{leyendoIA ? "Procesando con GPT..." : "Usar GPT-4o-mini"}</button><button type="button" onClick={() => { setFallbackIA(null); setErrorIA(null) }} disabled={leyendoIA} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50">Cancelar</button></div></div>)}<DatosComprobante proveedores={proveedores} empresas={empresas} empresaActivaId={empresaActivaId} proveedorId={proveedorId} setProveedorId={setProveedorId} numero={numeroFactura} setNumero={setNumeroFactura} fecha={fecha} setFecha={setFecha} fechaVencimiento={fechaVencimiento} setFechaVencimiento={setFechaVencimiento} /><ProductosFactura productos={productosDisponibles} lineas={calculo.lineas} agregarLinea={agregarLinea} quitarLinea={quitarLinea} actualizarLinea={actualizarLinea} actualizarProductoDeLinea={actualizarProductoDeLinea} crearProductoDesdeLinea={crearProductoDesdeLinea} /><ImpuestosFactura subtotal={calculo.subtotalNeto} descuentos={calculo.descuentos} iva={calculo.iva} impuestosInternos={calculo.impuestosInternos} cargos={cargos} total={calculo.total} /><PagoFactura pagarAlCargar={pagarAlCargar} setPagarAlCargar={setPagarAlCargar} montoPagoMostrado={montoPagoMostrado} setMontoPago={setMontoPago} setPagoTocado={setPagoTocado} total={calculo.total} formasPago={formasPago} /><button type="submit" disabled={lineas.length === 0 || !empresaActivaId || validacionIA?.ok === false} className="rounded-lg bg-black px-5 py-2 text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">Guardar factura</button></form>)
 }
