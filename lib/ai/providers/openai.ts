@@ -4,10 +4,6 @@ import type {
   TipoComprobanteIA,
 } from "../tipos";
 
-const openai = new OpenAI({
-  apiKey: process.env.OPENAI_API_KEY,
-});
-
 const openAISchema = {
   type: "object",
   properties: {
@@ -15,12 +11,10 @@ const openAISchema = {
     numero: { type: ["string", "null"] },
     fecha: { type: ["string", "null"] },
     fecha_vencimiento: { type: ["string", "null"] },
-
     subtotal_bruto: { type: ["number", "null"] },
     descuento_total: { type: ["number", "null"] },
     subtotal_neto: { type: ["number", "null"] },
     iva_total: { type: ["number", "null"] },
-
     cargos: {
       type: "array",
       items: {
@@ -33,9 +27,7 @@ const openAISchema = {
         additionalProperties: false,
       },
     },
-
     total: { type: ["number", "null"] },
-
     lineas: {
       type: "array",
       items: {
@@ -43,26 +35,21 @@ const openAISchema = {
         properties: {
           descripcion: { type: "string" },
           codigo_proveedor: { type: ["string", "null"] },
-
           cantidad: { type: "number" },
           cantidad_bonificada: { type: ["number", "null"] },
           cantidad_bonificada_detalle: { type: ["number", "null"] },
-
           precio_unitario: { type: "number" },
           precio_bruto_unitario: { type: ["number", "null"] },
           precio_neto: { type: ["number", "null"] },
           precio_neto_unitario: { type: ["number", "null"] },
           subtotal_neto: { type: ["number", "null"] },
           precio_final: { type: ["number", "null"] },
-
           iva: { type: ["number", "null"] },
           iva_importe: { type: ["number", "null"] },
           impuestos_internos: { type: ["number", "null"] },
-
           descuento: { type: ["number", "null"] },
           porcentaje_descuento: { type: ["number", "null"] },
           tipo_descuento: { type: ["string", "null"] },
-
           descuentos: {
             type: "array",
             items: {
@@ -72,23 +59,16 @@ const openAISchema = {
                 importe: { type: ["number", "null"] },
                 descripcion: { type: ["string", "null"] },
               },
-              required: [
-                "porcentaje",
-                "importe",
-                "descripcion",
-              ],
+              required: ["porcentaje", "importe", "descripcion"],
               additionalProperties: false,
             },
           },
-
           grupo_descuento: { type: ["string", "null"] },
-
           bonificacion: { type: ["number", "null"] },
           bonificacion_importe: { type: ["number", "null"] },
           bonificacion_tipo: { type: ["string", "null"] },
           tipo_bonificacion: { type: ["string", "null"] },
         },
-
         required: [
           "descripcion",
           "codigo_proveedor",
@@ -114,12 +94,10 @@ const openAISchema = {
           "bonificacion_tipo",
           "tipo_bonificacion",
         ],
-
         additionalProperties: false,
       },
     },
   },
-
   required: [
     "proveedor_nombre",
     "numero",
@@ -133,7 +111,6 @@ const openAISchema = {
     "total",
     "lineas",
   ],
-
   additionalProperties: false,
 };
 
@@ -197,46 +174,48 @@ export async function extraerConOpenAI(
   mimeType: string,
   tipo: TipoComprobanteIA
 ): Promise<ComprobanteExtraido> {
-  if (!process.env.OPENAI_API_KEY) {
+  const apiKey = process.env.OPENAI_API_KEY;
+
+  if (!apiKey) {
     throw new Error("Falta la variable de entorno OPENAI_API_KEY");
   }
 
+  const openai = new OpenAI({ apiKey });
   const prompt = crearPrompt(tipo);
 
-const contenido =
-  mimeType === "application/pdf"
-    ? [
-        {
-          type: "input_file" as const,
-          filename: "comprobante.pdf",
-          file_data: `data:application/pdf;base64,${base64}`,
-        },
-        {
-          type: "input_text" as const,
-          text: prompt,
-        },
-      ]
-    : [
-        {
-          type: "input_image" as const,
-          image_url: `data:${mimeType};base64,${base64}`,
-          detail: "high" as const,
-        },
-        {
-          type: "input_text" as const,
-          text: prompt,
-        },
-      ];
+  const contenido =
+    mimeType === "application/pdf"
+      ? [
+          {
+            type: "input_file" as const,
+            filename: "comprobante.pdf",
+            file_data: `data:application/pdf;base64,${base64}`,
+          },
+          {
+            type: "input_text" as const,
+            text: prompt,
+          },
+        ]
+      : [
+          {
+            type: "input_image" as const,
+            image_url: `data:${mimeType};base64,${base64}`,
+            detail: "high" as const,
+          },
+          {
+            type: "input_text" as const,
+            text: prompt,
+          },
+        ];
 
-const response = await openai.responses.create({
-  model: "gpt-4o-mini",
-
-  input: [
-    {
-      role: "user",
-      content: contenido,
-    },
-  ],
+  const response = await openai.responses.create({
+    model: "gpt-4o-mini",
+    input: [
+      {
+        role: "user",
+        content: contenido,
+      },
+    ],
     text: {
       format: {
         type: "json_schema",
