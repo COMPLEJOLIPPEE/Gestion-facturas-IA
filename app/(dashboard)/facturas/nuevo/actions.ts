@@ -32,6 +32,7 @@ function numero(valor: unknown) {
   return Number.isFinite(resultado) ? resultado : 0
 }
 function redondear(valor: number) { return Number(valor.toFixed(2)) }
+function coincide(a: number, b: number) { return Math.abs(a - b) <= 0.02 }
 const EMPRESA_COOKIE = "factura_ia_empresa_activa"
 
 export async function crearFactura(formData: FormData) {
@@ -86,6 +87,28 @@ export async function crearFactura(formData: FormData) {
   const iva = redondear(resumen.iva)
   const impuestosInternos = redondear(resumen.impuestosInternos)
   const total = redondear(subtotal + iva + impuestosInternos + totalCargos)
+
+  // Si la factura fue procesada por IA, el pie del comprobante actúa como
+  // control contable. No permitimos guardar silenciosamente líneas cuyo
+  // cálculo contradiga los totales oficiales extraídos.
+  const iaSubtotal = formData.get("ia_subtotal_neto")
+  const iaIva = formData.get("ia_iva_total")
+  const iaTotal = formData.get("ia_total")
+  if (iaSubtotal !== null || iaIva !== null || iaTotal !== null) {
+    const oficialSubtotal = iaSubtotal === null || iaSubtotal === "" ? null : numero(iaSubtotal)
+    const oficialIva = iaIva === null || iaIva === "" ? null : numero(iaIva)
+    const oficialTotal = iaTotal === null || iaTotal === "" ? null : numero(iaTotal)
+
+    if (oficialSubtotal !== null && !coincide(subtotal, oficialSubtotal)) {
+      throw new Error(`La factura no coincide con el subtotal oficial del comprobante. Calculado: $${subtotal.toFixed(2)} / Oficial: $${oficialSubtotal.toFixed(2)}.`)
+    }
+    if (oficialIva !== null && !coincide(iva, oficialIva)) {
+      throw new Error(`La factura no coincide con el IVA oficial del comprobante. Calculado: $${iva.toFixed(2)} / Oficial: $${oficialIva.toFixed(2)}.`)
+    }
+    if (oficialTotal !== null && !coincide(total, oficialTotal)) {
+      throw new Error(`La factura no coincide con el total oficial del comprobante. Calculado: $${total.toFixed(2)} / Oficial: $${oficialTotal.toFixed(2)}.`)
+    }
+  }
 
   const { data: factura, error: errorFactura } = await supabase.from("facturas").insert({
     numero: (formData.get("numero") as string) || null,
