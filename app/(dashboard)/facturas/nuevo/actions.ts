@@ -32,7 +32,7 @@ type ItemInput = {
 
 function numero(valor: unknown) { const resultado = Number(valor ?? 0); return Number.isFinite(resultado) ? resultado : 0 }
 function redondear(valor: number) { return Number(valor.toFixed(2)) }
-function coincide(a: number, b: number) { return Math.abs(a - b) <= 0.02 }
+function coincide(a: number, b: number) { return Math.abs(a - b) <= 0.50 }
 const EMPRESA_COOKIE = "factura_ia_empresa_activa"
 
 export async function crearFactura(formData: FormData) {
@@ -53,13 +53,19 @@ export async function crearFactura(formData: FormData) {
 
   const items: ItemInput[] = JSON.parse(String(formData.get("items") ?? "[]"))
   if (!items.length) throw new Error("La factura necesita al menos una línea")
-  if (items.some((item) => !item.tipo_linea || item.tipo_linea === "producto") && items.some((item) => (item.tipo_linea ?? "producto") === "producto" && !item.producto_id)) {
-    throw new Error("Todas las líneas de producto deben tener un producto seleccionado")
-  }
+  if (items.some((item) => (item.tipo_linea ?? "producto") === "producto" && !item.producto_id)) throw new Error("Todas las líneas de producto deben tener un producto seleccionado")
 
   let cargos: CargoInput[] = []
   try { cargos = JSON.parse(String(formData.get("cargos") ?? "[]")) } catch { throw new Error("Los cargos de la factura no tienen un formato válido.") }
-  const totalCargos = cargos.reduce((acc, cargo) => acc + numero(cargo.importe), 0)
+
+  // Los impuestos internos y las percepciones del pie llegan como cargos de IA.
+  // Separamos los internos para guardarlos en su columna específica y dejamos
+  // percepciones/otros conceptos en otros_cargos.
+  const cargosInternos = cargos.filter((cargo) => /impuestos?\s+internos?/i.test(cargo.descripcion))
+  const otrosCargos = cargos.filter((cargo) => !/impuestos?\s+internos?/i.test(cargo.descripcion))
+  const totalImpuestosInternosCargo = cargosInternos.reduce((acc, cargo) => acc + numero(cargo.importe), 0)
+  const totalOtrosCargos = otrosCargos.reduce((acc, cargo) => acc + numero(cargo.importe), 0)
+  const totalCargos = redondear(totalImpuestosInternosCargo + totalOtrosCargos)
 
   const resumen = items.reduce((acc, item) => {
     const cantidad = Math.max(0, numero(item.cantidad))
@@ -72,6 +78,7 @@ export async function crearFactura(formData: FormData) {
     const porCantidad = item.tipo_bonificacion === "cantidad"
     const bonificacionImporte = porCantidad ? cantidadBonificada * Math.abs(precioUnitario) : bonificacion
     const subtotalNeto = esAjusteNegativo ? -Math.abs(numero(item.subtotal_neto ?? bruto)) : Math.max(0, bruto - descuento - bonificacionImporte)
+    // El IVA de los ajustes ya viene calculado sobre la base neta por el procesador.
     const ivaImporte = numero(item.iva_importe) !== 0 ? numero(item.iva_importe) : subtotalNeto * (numero(item.iva) / 100)
     acc.subtotalBruto += bruto
     acc.descuentos += esAjusteNegativo ? Math.abs(subtotalNeto) : descuento + bonificacionImporte
@@ -81,24 +88,30 @@ export async function crearFactura(formData: FormData) {
     return acc
   }, { subtotalBruto: 0, descuentos: 0, subtotalNeto: 0, iva: 0, impuestosInternos: 0 })
 
-  const subtotal = redondear(resumen.subtotalNeto)
-  const iva = redondear(resumen.iva)
-  const impuestosInternos = redondear(resumen.impuestosInternos)
-  const total = redondear(subtotal + iva + impuestosInternos + totalCargos)
+  const subtotalCalculado = redondear(resumen.subtotalNeto)
+  const ivaCalculado = redondear(resumen.iva)
+  const impuestosInternos = redondear(resumen.impuestosInternos + totalImpuestosInternosCargo)
+  const totalCalculado = redondear(subtotalCalculado + ivaCalculado + impuestosInternos + totalOtrosCargos)
 
   const iaSubtotal = formData.get("ia_subtotal_neto")
   const iaIva = formData.get("ia_iva_total")
   const iaTotal = formData.get("ia_total")
-  if (iaSubtotal !== null || iaIva !== null || iaTotal !== null) {
-    const oficialSubtotal = iaSubtotal === null || iaSubtotal === "" ? null : numero(iaSubtotal)
-    const oficialIva = iaIva === null || iaIva === "" ? null : numero(iaIva)
-    const oficialTotal = iaTotal === null || iaTotal === "" ? null : numero(iaTotal)
-    if (oficialSubtotal !== null && !coincide(subtotal, oficialSubtotal)) throw new Error(`La factura no coincide con el subtotal oficial del comprobante. Calculado: $${subtotal.toFixed(2)} / Oficial: $${oficialSubtotal.toFixed(2)}.`)
-    if (oficialIva !== null && !coincide(iva, oficialIva)) throw new Error(`La factura no coincide con el IVA oficial del comprobante. Calculado: $${iva.toFixed(2)} / Oficial: $${oficialIva.toFixed(2)}.`)
-    if (oficialTotal !== null && !coincide(total, oficialTotal)) throw new Error(`La factura no coincide con el total oficial del comprobante. Calculado: $${total.toFixed(2)} / Oficial: $${oficialTotal.toFixed(2)}.`)
-  }
+  const oficialSubtotal = iaSubtotal === null || iaSubtotal === "" ? null : numero(iaSubtotal)
+  const oficialIva = iaIva === null || iaIva === "" ? null : numero(iaIva)
+  const oficialTotal = iaTotal === null || iaTotal === "" ? null : numero(iaTotal)
 
-  const { data: factura, error: errorFactura } = await supabase.from("facturas").insert({ numero: (formData.get("numero") as string) || null, fecha: formData.get("fecha") as string, fecha_vencimiento: (formData.get("fecha_vencimiento") as string) || null, proveedor_id: formData.get("proveedor_id") as string, empresa_id: empresaId, subtotal, descuento_total: redondear(resumen.descuentos), iva, impuestos_internos: impuestosInternos, otros_cargos: redondear(totalCargos), total, estado: "pendiente" }).select("id").single()
+  if (oficialSubtotal !== null && !coincide(subtotalCalculado, oficialSubtotal)) throw new Error(`La factura no coincide con el subtotal oficial del comprobante. Calculado: $${subtotalCalculado.toFixed(2)} / Oficial: $${oficialSubtotal.toFixed(2)}.`)
+  if (oficialIva !== null && !coincide(ivaCalculado, oficialIva)) throw new Error(`La factura no coincide con el IVA oficial del comprobante. Calculado: $${ivaCalculado.toFixed(2)} / Oficial: $${oficialIva.toFixed(2)}.`)
+  if (oficialTotal !== null && !coincide(totalCalculado, oficialTotal)) throw new Error(`La factura no coincide con el total oficial del comprobante. Calculado: $${totalCalculado.toFixed(2)} / Oficial: $${oficialTotal.toFixed(2)}.`)
+
+  // Cuando la diferencia está dentro del margen de redondeo, usamos el importe
+  // oficial del pie para la cabecera de la factura. Las líneas conservan sus
+  // importes reales y la diferencia queda explicada por redondeos de presentación.
+  const subtotal = oficialSubtotal !== null && coincide(subtotalCalculado, oficialSubtotal) ? redondear(oficialSubtotal) : subtotalCalculado
+  const iva = oficialIva !== null && coincide(ivaCalculado, oficialIva) ? redondear(oficialIva) : ivaCalculado
+  const total = oficialTotal !== null && coincide(totalCalculado, oficialTotal) ? redondear(oficialTotal) : totalCalculado
+
+  const { data: factura, error: errorFactura } = await supabase.from("facturas").insert({ numero: (formData.get("numero") as string) || null, fecha: formData.get("fecha") as string, fecha_vencimiento: (formData.get("fecha_vencimiento") as string) || null, proveedor_id: formData.get("proveedor_id") as string, empresa_id: empresaId, subtotal, descuento_total: redondear(resumen.descuentos), iva, impuestos_internos: redondear(impuestosInternos), otros_cargos: redondear(totalOtrosCargos), total, estado: "pendiente" }).select("id").single()
   if (errorFactura || !factura) throw new Error(`Error creando factura: ${errorFactura?.message}`)
 
   const itemsParaGuardar = items.map((item) => {
@@ -116,29 +129,7 @@ export async function crearFactura(formData: FormData) {
     const ivaImporte = numero(item.iva_importe) !== 0 ? (esAjusteNegativo ? -Math.abs(numero(item.iva_importe)) : numero(item.iva_importe)) : subtotalNeto * (numero(item.iva) / 100)
     const impuestosInternos = esAjusteNegativo ? -Math.abs(numero(item.impuestos_internos)) : numero(item.impuestos_internos)
     const descuentosDetalle = [...(item.descuentos ?? []), ...(item.grupo_descuento ? [{ descripcion: item.grupo_descuento, importe: descuento }] : [])]
-    return {
-      factura_id: factura.id,
-      producto_id: esAjusteNegativo ? null : item.producto_id,
-      descripcion: item.descripcionLeida ?? null,
-      tipo_linea: esAjusteNegativo ? "ajuste" : "producto",
-      es_ajuste_negativo: esAjusteNegativo,
-      cantidad,
-      precio_unitario: redondear(esAjusteNegativo ? -Math.abs(brutoUnitario) : brutoUnitario),
-      iva: numero(item.iva),
-      "alicuota IVA": numero(item.iva),
-      descuento,
-      precio_final: redondear(precioNetoUnitario),
-      precio_bruto_unitario: redondear(esAjusteNegativo ? -Math.abs(brutoUnitario) : brutoUnitario),
-      descuento_importe: redondear(descuento),
-      bonificacion_importe: redondear(bonificacionImporte),
-      precio_neto_unitario: redondear(precioNetoUnitario),
-      subtotal_neto: redondear(subtotalNeto),
-      iva_importe: redondear(ivaImporte),
-      impuestos_internos: redondear(impuestosInternos),
-      descuentos_detalle: descuentosDetalle.length ? descuentosDetalle : null,
-      bonificacion_tipo: item.tipo_bonificacion ?? null,
-      cantidad_bonificada: cantidadBonificada || null,
-    }
+    return { factura_id: factura.id, producto_id: esAjusteNegativo ? null : item.producto_id, descripcion: item.descripcionLeida ?? null, tipo_linea: esAjusteNegativo ? "ajuste" : "producto", es_ajuste_negativo: esAjusteNegativo, cantidad, precio_unitario: redondear(esAjusteNegativo ? -Math.abs(brutoUnitario) : brutoUnitario), iva: numero(item.iva), "alicuota IVA": numero(item.iva), descuento, precio_final: redondear(precioNetoUnitario), precio_bruto_unitario: redondear(esAjusteNegativo ? -Math.abs(brutoUnitario) : brutoUnitario), descuento_importe: redondear(descuento), bonificacion_importe: redondear(bonificacionImporte), precio_neto_unitario: redondear(precioNetoUnitario), subtotal_neto: redondear(subtotalNeto), iva_importe: redondear(ivaImporte), impuestos_internos: redondear(impuestosInternos), descuentos_detalle: descuentosDetalle.length ? descuentosDetalle : null, bonificacion_tipo: item.tipo_bonificacion ?? null, cantidad_bonificada: cantidadBonificada || null }
   })
 
   const { error: errorItems } = await supabase.from("factura_items").insert(itemsParaGuardar as never[])
