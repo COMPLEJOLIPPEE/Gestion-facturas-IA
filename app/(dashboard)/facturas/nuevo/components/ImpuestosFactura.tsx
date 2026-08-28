@@ -21,49 +21,21 @@ function dinero(valor: number) {
   });
 }
 
-export default function ImpuestosFactura({
-  subtotal,
-  descuentos,
-  iva,
-  impuestosInternos,
-  cargos,
-  total,
-}: Props) {
+export default function ImpuestosFactura({ subtotal, descuentos, iva, impuestosInternos, cargos, total }: Props) {
   return (
     <div className="rounded-xl bg-white p-6 shadow">
-      <h2 className="mb-6 text-xl font-semibold">
-        💰 Impuestos y totales
-      </h2>
+      <h2 className="mb-6 text-xl font-semibold">💰 Impuestos y totales</h2>
+      <input type="hidden" name="cargos" value={JSON.stringify(cargos)} />
 
       <div className="grid max-w-md gap-3 ml-auto">
-        <div className="flex justify-between text-sm">
-          <span className="text-gray-500">Subtotal neto</span>
-          <span>${dinero(subtotal)}</span>
-        </div>
-
-        <div className="flex justify-between text-sm">
-          <span className="text-gray-500">Descuentos y bonificaciones</span>
-          <span className={descuentos > 0 ? "text-red-600" : "text-gray-700"}>
-            -${dinero(descuentos)}
-          </span>
-        </div>
-
-        <div className="flex justify-between text-sm">
-          <span className="text-gray-500">IVA</span>
-          <span>${dinero(iva)}</span>
-        </div>
-
-        <div className="flex justify-between text-sm">
-          <span className="text-gray-500">Impuestos internos</span>
-          <span>${dinero(impuestosInternos)}</span>
-        </div>
+        <div className="flex justify-between text-sm"><span className="text-gray-500">Subtotal neto</span><span>${dinero(subtotal)}</span></div>
+        <div className="flex justify-between text-sm"><span className="text-gray-500">Descuentos y bonificaciones</span><span className={descuentos > 0 ? "text-red-600" : "text-gray-700"}>-${dinero(descuentos)}</span></div>
+        <div className="flex justify-between text-sm"><span className="text-gray-500">IVA</span><span>${dinero(iva)}</span></div>
+        <div className="flex justify-between text-sm"><span className="text-gray-500">Impuestos internos</span><span>${dinero(impuestosInternos)}</span></div>
 
         {cargos.length > 0 && (
           <div className="mt-2 border-t pt-3">
-            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">
-              Percepciones y otros cargos
-            </p>
-
+            <p className="mb-2 text-xs font-semibold uppercase tracking-wide text-gray-500">Percepciones y otros cargos</p>
             {cargos.map((cargo, index) => (
               <div key={index} className="flex justify-between text-sm">
                 <span className="text-gray-500">{cargo.descripcion}</span>
@@ -73,10 +45,7 @@ export default function ImpuestosFactura({
           </div>
         )}
 
-        <div className="mt-2 flex justify-between border-t pt-3 text-lg font-semibold">
-          <span>Total</span>
-          <span>${dinero(total)}</span>
-        </div>
+        <div className="mt-2 flex justify-between border-t pt-3 text-lg font-semibold"><span>Total</span><span>${dinero(total)}</span></div>
       </div>
     </div>
   );
