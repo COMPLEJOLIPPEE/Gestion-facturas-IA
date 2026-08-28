@@ -42,7 +42,7 @@ export async function crearLogIA({
 }
 
 type ActualizarLogIAParams = {
-  logId: string
+  logId: string | null
   estado: IAEstado
   motivoError?: string | null
   accionUsuario?: string | null
@@ -56,6 +56,10 @@ export async function actualizarLogIA({
   accionUsuario = null,
   lineasDetectadas = null,
 }: ActualizarLogIAParams) {
+  // Si el registro inicial no pudo crearse, no intentamos actualizar
+  // un UUID vacío. El procesamiento de IA no debe fallar por el logging.
+  if (!logId) return
+
   const supabase = await createClient()
 
   const { error } = await supabase
