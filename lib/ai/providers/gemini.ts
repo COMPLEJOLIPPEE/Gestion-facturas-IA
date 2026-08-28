@@ -45,13 +45,22 @@ Identificá proveedor, número, fechas y los importes que figuran en el PIE/RESU
 - descuento total
 - subtotal neto
 - IVA total
-- impuestos internos si aparecen
-- percepciones
+- impuestos internos total
+- percepciones (IVA, IIBB, etc.)
 - otros cargos
 - total final
 
 Los importes del PIE/RESUMEN son la fuente de verdad para los totales del comprobante.
 No los reconstruyas a partir de las líneas si el pie los muestra claramente.
+
+IMPORTANTE: todo importe del pie que NO forme parte del subtotal neto ni del IVA total debe conservarse.
+Los impuestos internos deben ir en impuestos_internos_total.
+Las percepciones y otros cargos deben ir también dentro de cargos, con su descripción exacta e importe,
+para que la aplicación pueda sumarlos al total. No omitas percepciones por considerarlas meramente
+informativas: si tienen importe y forman parte del total, son cargos contables del comprobante.
+
+Ejemplo: si el pie muestra "Imp. Internos $10.297,26", "Perc. IVA $11.044,55" y "Perc. IIBB BsAs $15.137,96",
+cargos debe contener esos conceptos con esos importes, y el total debe reflejar los tres.
 
 No inventes información. Si un dato no aparece o no puede determinarse con seguridad, devolvé null.
 Las fechas deben estar en formato YYYY-MM-DD. Todos los importes deben ser números.
@@ -61,22 +70,17 @@ INTERPRETACIÓN DE SIGNOS — MUY IMPORTANTE
 ==================================================
 
 NO interpretes un guion "-" como signo negativo solamente porque aparece cerca de un número.
-En documentos argentinos el guion también puede ser un SEPARADOR VISUAL entre columnas, campos o
-conceptos. Un importe es negativo solamente cuando el documento muestra evidencia clara de que
-ese importe representa una reducción/ajuste:
-
-1. el signo menos está unido al importe o claramente dentro de su columna;
-2. el concepto corresponde a descuento, bonificación, devolución, ajuste, crédito u otro concepto
-   que contablemente reduce el comprobante;
-3. o el signo y el contexto del documento permiten confirmarlo.
+En documentos argentinos el guion también puede ser un SEPARADOR VISUAL entre columnas, campos o conceptos.
+Un importe es negativo solamente cuando el documento muestra evidencia clara de que ese importe representa
+una reducción/ajuste.
 
 Ejemplo: "38.380,17 - 7.000,00" NO significa que 38.380,17 sea negativo.
 Ejemplo: una línea de ajuste que muestra "-38.380,17" en la columna de precio/subtotal SÍ es negativa.
 
-Nunca uses Math.abs ni conviertas un importe negativo en positivo por tu cuenta.
+Nunca conviertas un importe negativo en positivo por tu cuenta.
 Conservá el signo que realmente tenga el comprobante.
 
-Para cada línea indicá también:
+Para cada línea indicá:
 - tipo_linea: producto, descuento_linea, descuento_agrupado o ajuste;
 - es_ajuste_negativo: true solamente cuando el documento confirme que la línea es un ajuste negativo.
 
@@ -112,7 +116,7 @@ No lo transformes a absoluto.
 Para una línea negativa confirmada:
 - conservá precio_unitario negativo;
 - conservá subtotal_neto negativo cuando corresponda;
-- conservá iva_importe negativo cuando figure así;
+- conservá iva_importe negativo cuando corresponda;
 - es_ajuste_negativo = true.
 
 Para una línea normal:
@@ -127,18 +131,8 @@ IVA
 "iva" es la ALICUOTA en porcentaje: 21, 10.5, 27, 0, etc.
 "iva_importe" es el IMPORTE de IVA de la línea y conserva su signo.
 
-No confundas la columna de alícuota con la columna de importe de IVA.
-
-==================================================
-DESCUENTOS Y BONIFICACIONES
-==================================================
-
-Un descuento o bonificación expresado como concepto puede ser positivo dentro de su propio campo,
-porque representa el valor de la reducción. Eso NO significa que el subtotal de la línea deba ser
-positivo: el subtotal debe conservar el signo contable que corresponda.
-
-No conviertas una línea negativa de ajuste en producto positivo.
-No conviertas un separador "-" en signo negativo sin evidencia documental.
+Para ajustes negativos, si el documento no muestra claramente un importe de IVA de línea confiable,
+la aplicación calculará el IVA negativo a partir del subtotal neto y la alícuota.
 
 ==================================================
 VALIDACIÓN ANTES DE RESPONDER
@@ -148,25 +142,18 @@ Primero identificá los TOTALES DEL PIE.
 Después revisá las líneas y sus signos.
 Finalmente comprobá, cuando el documento lo permita, que:
 
-subtotal neto + IVA + impuestos internos + percepciones + otros cargos = total final
+subtotal neto + IVA + impuestos internos + cargos = total final
 
 respetando signos y redondeo.
 
-Si las líneas NO permiten reconstruir exactamente el total del pie, NO fuerces las líneas para que
-coincidan. Conservá los importes oficiales del pie y devolvé los valores de línea que realmente se
-puedan leer. La aplicación validará la diferencia y pedirá revisión en lugar de guardar un total
-incorrecto.
+Si las líneas NO permiten reconstruir exactamente el total del pie, NO fuerces las líneas para que coincidan.
+Conservá los importes oficiales del pie y devolvé los valores de línea que realmente se puedan leer.
+La aplicación validará la diferencia y pedirá revisión en lugar de guardar un total incorrecto.
 `
 
   const contenido = mimeType === "application/pdf"
-    ? [
-        { inlineData: { mimeType: "application/pdf", data: base64 } },
-        { text: prompt },
-      ]
-    : [
-        { inlineData: { mimeType, data: base64 } },
-        { text: prompt },
-      ]
+    ? [{ inlineData: { mimeType: "application/pdf", data: base64 } }, { text: prompt }]
+    : [{ inlineData: { mimeType, data: base64 } }, { text: prompt }]
 
   const response = await withRetry(() => ai.models.generateContent({
     model: modelo,
@@ -175,7 +162,6 @@ incorrecto.
   }))
 
   if (!response.text) throw new Error("Gemini no devolvió información")
-
   try { return JSON.parse(response.text) as ComprobanteExtraido }
   catch { throw new Error("Gemini devolvió un JSON inválido") }
 }
