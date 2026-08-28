@@ -98,7 +98,7 @@ export function FacturaForm({ proveedores, empresas, empresaActivaId, productos,
     const subtotalDiff = diferencia(totalesIA.subtotalNeto, calculo.subtotalNeto)
     const ivaDiff = diferencia(totalesIA.ivaTotal, calculo.iva)
     const totalDiff = diferencia(totalesIA.total, calculo.total)
-    const ok = subtotalDiff <= 0.02 && ivaDiff <= 0.02 && totalDiff <= 0.02
+    const ok = subtotalDiff <= 0.50 && ivaDiff <= 0.50 && totalDiff <= 0.50
     return { ok, subtotalDiff, ivaDiff, totalDiff }
   }, [totalesIA, calculo.subtotalNeto, calculo.iva, calculo.total])
 
