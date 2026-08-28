@@ -18,9 +18,11 @@ export default function ForgotPasswordPage() {
 
     const supabase = createClient()
 
+    // Password recovery is handled in the browser. This avoids sending the
+    // recovery PKCE code through the server callback, where the browser's
+    // verifier is not reliably available.
     const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo:
-        `${window.location.origin}/auth/callback?next=/reset-password`,
+      redirectTo: `${window.location.origin}/reset-password`,
     })
 
     setLoading(false)
@@ -49,10 +51,7 @@ export default function ForgotPasswordPage() {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label className="mb-1 block text-sm font-medium">
-              Email
-            </label>
-
+            <label className="mb-1 block text-sm font-medium">Email</label>
             <input
               type="email"
               value={email}
@@ -85,10 +84,7 @@ export default function ForgotPasswordPage() {
         </form>
 
         <div className="mt-4 text-center">
-          <a
-            href="/login"
-            className="text-sm text-blue-600 hover:underline"
-          >
+          <a href="/login" className="text-sm text-blue-600 hover:underline">
             Volver al inicio de sesión
           </a>
         </div>
