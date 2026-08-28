@@ -8,32 +8,12 @@ export type TipoBonificacionProcesada = "cantidad" | "importe" | "porcentaje";
 export type ProductoSistema = { id: string; nombre: string };
 
 export type LineaProcesada = {
-  producto_id: string;
-  cantidad: number;
-  precio_unitario: number;
-  iva: number;
-  descuento: number;
-  precio_final: number;
-  bonificacion?: number;
-  cantidad_bonificada?: number;
-  cantidad_bonificada_detalle?: number;
-  tipo_bonificacion?: TipoBonificacionProcesada;
-  precio_bruto_unitario?: number;
-  precio_neto?: number;
-  subtotal_neto?: number;
-  iva_importe?: number;
-  impuestos_internos?: number;
-  codigo_proveedor?: string;
-  descripcionLeida: string;
-  autoMatcheado: boolean;
-  score: number;
-  confianza: "alta" | "media" | "baja";
-  motivo: string;
-  fuente: "alias" | "smartmatch" | "manual";
-  producto_sugerido_id?: string;
-  producto_sugerido_nombre?: string;
-  tipo_linea?: "producto" | "ajuste";
-  es_ajuste_negativo?: boolean;
+  producto_id: string; cantidad: number; precio_unitario: number; iva: number; descuento: number; precio_final: number;
+  bonificacion?: number; cantidad_bonificada?: number; cantidad_bonificada_detalle?: number; tipo_bonificacion?: TipoBonificacionProcesada;
+  precio_bruto_unitario?: number; precio_neto?: number; subtotal_neto?: number; iva_importe?: number; impuestos_internos?: number;
+  codigo_proveedor?: string; descripcionLeida: string; autoMatcheado: boolean; score: number;
+  confianza: "alta" | "media" | "baja"; motivo: string; fuente: "alias" | "smartmatch" | "manual";
+  producto_sugerido_id?: string; producto_sugerido_nombre?: string; tipo_linea?: "producto" | "ajuste"; es_ajuste_negativo?: boolean;
 };
 
 function normalizarTipoBonificacion(valor: string | null | undefined): TipoBonificacionProcesada | undefined {
@@ -48,9 +28,12 @@ function datosFinancieros(linea: LineaIA, esAjusteNegativo: boolean) {
     const precio = -Math.abs(numero(linea.precio_bruto_unitario ?? linea.precio_unitario));
     const cantidad = Math.max(1, numero(linea.cantidad ?? 1));
     const subtotal = linea.subtotal_neto != null ? -Math.abs(numero(linea.subtotal_neto)) : redondear(cantidad * precio);
-    const ivaImporte = linea.iva_importe != null ? -Math.abs(numero(linea.iva_importe)) : redondear(subtotal * (numero(linea.iva ?? 21) / 100));
+    // No confiamos en un IVA de línea que pueda haber sido leído desde otra columna.
+    // Para un ajuste negativo calculamos el IVA sobre su base neta y su alícuota.
+    const tasaIVA = numero(linea.iva ?? 21);
+    const ivaImporte = redondear(subtotal * (tasaIVA / 100));
     const impuestosInternos = linea.impuestos_internos != null ? -Math.abs(numero(linea.impuestos_internos)) : 0;
-    return { precio_bruto_unitario: redondear(precio), precio_neto: cantidad > 0 ? redondear(subtotal / cantidad) : redondear(precio), subtotal_neto: redondear(subtotal), iva_importe: redondear(ivaImporte), impuestos_internos: redondear(impuestosInternos), bonificacion: undefined, cantidad_bonificada: undefined, cantidad_bonificada_detalle: undefined, tipo_bonificacion: undefined };
+    return { precio_bruto_unitario: redondear(precio), precio_neto: cantidad > 0 ? redondear(subtotal / cantidad) : redondear(precio), subtotal_neto: redondear(subtotal), iva_importe: ivaImporte, impuestos_internos: redondear(impuestosInternos), bonificacion: undefined, cantidad_bonificada: undefined, cantidad_bonificada_detalle: undefined, tipo_bonificacion: undefined };
   }
 
   const precioBrutoUnitario = linea.precio_bruto_unitario != null ? Math.abs(numero(linea.precio_bruto_unitario)) : Math.abs(numero(linea.precio_unitario ?? 0));
