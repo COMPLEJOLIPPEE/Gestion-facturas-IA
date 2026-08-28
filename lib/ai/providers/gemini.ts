@@ -37,31 +37,48 @@ Analizá TODO el documento antes de responder.
 Devolvé únicamente un JSON válido siguiendo exactamente el schema recibido.
 
 ==================================================
-DATOS GENERALES
+DATOS GENERALES Y TOTALES OFICIALES
 ==================================================
 
-Identificá:
-- proveedor
-- número de comprobante
-- fecha
-- fecha de vencimiento
+Identificá proveedor, número, fechas y los importes que figuran en el PIE/RESUMEN del comprobante:
 - subtotal bruto
 - descuento total
 - subtotal neto
 - IVA total
-- impuestos internos
+- impuestos internos si aparecen
 - percepciones
 - otros cargos
 - total final
 
+Los importes del PIE/RESUMEN son la fuente de verdad para los totales del comprobante.
+No los reconstruyas a partir de las líneas si el pie los muestra claramente.
+
 No inventes información. Si un dato no aparece o no puede determinarse con seguridad, devolvé null.
 Las fechas deben estar en formato YYYY-MM-DD. Todos los importes deben ser números.
 
-IMPORTANTE CON LOS TOTALES:
-Leé específicamente el pie/resumen de la factura y sus columnas. No confundas P. UNITARIO,
-P. NETO, DESCUENTO, SUBTOTAL e IVA. Los totales del pie tienen prioridad para validar la lectura.
-El subtotal neto es el importe después de descuentos/ajustes comerciales y antes de IVA,
-impuestos y percepciones. El total final debe reconciliar con el pie de la factura.
+==================================================
+INTERPRETACIÓN DE SIGNOS — MUY IMPORTANTE
+==================================================
+
+NO interpretes un guion "-" como signo negativo solamente porque aparece cerca de un número.
+En documentos argentinos el guion también puede ser un SEPARADOR VISUAL entre columnas, campos o
+conceptos. Un importe es negativo solamente cuando el documento muestra evidencia clara de que
+ese importe representa una reducción/ajuste:
+
+1. el signo menos está unido al importe o claramente dentro de su columna;
+2. el concepto corresponde a descuento, bonificación, devolución, ajuste, crédito u otro concepto
+   que contablemente reduce el comprobante;
+3. o el signo y el contexto del documento permiten confirmarlo.
+
+Ejemplo: "38.380,17 - 7.000,00" NO significa que 38.380,17 sea negativo.
+Ejemplo: una línea de ajuste que muestra "-38.380,17" en la columna de precio/subtotal SÍ es negativa.
+
+Nunca uses Math.abs ni conviertas un importe negativo en positivo por tu cuenta.
+Conservá el signo que realmente tenga el comprobante.
+
+Para cada línea indicá también:
+- tipo_linea: producto, descuento_linea, descuento_agrupado o ajuste;
+- es_ajuste_negativo: true solamente cuando el documento confirme que la línea es un ajuste negativo.
 
 ==================================================
 PRODUCTOS Y AJUSTES
@@ -73,6 +90,7 @@ Para cada línea identificá:
 - cantidad
 - cantidad_bonificada
 - precio_unitario
+- precio_bruto_unitario
 - descuento
 - porcentaje_descuento
 - descuentos
@@ -81,65 +99,63 @@ Para cada línea identificá:
 - tipo_bonificacion
 - cantidad_bonificada_detalle
 - precio_neto
+- precio_neto_unitario
 - precio_final
 - subtotal_neto
 - iva
 - iva_importe
 - impuestos_internos
 
-"precio_unitario" representa el precio original de la línea.
+"precio_unitario" representa el importe unitario que aparece en la columna de precio de esa línea.
+No lo transformes a absoluto.
 
-ATENCIÓN: algunas facturas argentinas representan descuentos, promociones o ajustes comerciales
-como LÍNEAS NEGATIVAS. En esas líneas el precio unitario, subtotal e IVA pueden ser negativos.
-NO conviertas esos importes a positivos y NO los elimines. Conservá el signo original para que
-los totales puedan reconciliarse.
-
-Si una línea negativa es claramente un ajuste/descuento y no un producto real, igualmente
-conservá la línea para poder reconstruir los totales. Podés identificarla con tipo_descuento.
-
-Para una línea negativa:
+Para una línea negativa confirmada:
 - conservá precio_unitario negativo;
 - conservá subtotal_neto negativo cuando corresponda;
 - conservá iva_importe negativo cuando figure así;
-- no conviertas el importe a valor absoluto.
+- es_ajuste_negativo = true.
 
-Para líneas normales:
-- precio_unitario positivo;
-- subtotal_neto = cantidad × precio_unitario - descuentos - bonificaciones;
+Para una línea normal:
+- precio_unitario positivo salvo que el documento indique expresamente lo contrario;
+- subtotal_neto = cantidad × precio_unitario menos descuentos/bonificaciones aplicables;
 - IVA calculado/aplicado sobre la base neta correspondiente.
 
 ==================================================
-IVA POR PRODUCTO
+IVA
 ==================================================
 
-El campo "iva" representa la ALICUOTA de IVA en porcentaje.
-Ejemplos válidos: 21, 10.5, 27, 0.
+"iva" es la ALICUOTA en porcentaje: 21, 10.5, 27, 0, etc.
+"iva_importe" es el IMPORTE de IVA de la línea y conserva su signo.
 
-El campo "iva_importe" representa el IMPORTE de IVA de esa línea y debe conservar su signo.
-
-Si la alícuota no aparece junto a cada producto pero aparece en el pie de la factura, utilizá esa
-alícuota para los productos cuando la estructura indique que corresponde a todas las líneas.
+No confundas la columna de alícuota con la columna de importe de IVA.
 
 ==================================================
 DESCUENTOS Y BONIFICACIONES
 ==================================================
 
-Existen descuentos por porcentaje, descuentos de grupo y bonificaciones por cantidad/importe.
-No confundas una línea negativa de ajuste con un producto cuyo precio deba convertirse a positivo.
+Un descuento o bonificación expresado como concepto puede ser positivo dentro de su propio campo,
+porque representa el valor de la reducción. Eso NO significa que el subtotal de la línea deba ser
+positivo: el subtotal debe conservar el signo contable que corresponda.
 
-Distribuí descuentos de grupo proporcionalmente según el valor bruto de los productos cuando
-el documento permita determinarlo.
+No conviertas una línea negativa de ajuste en producto positivo.
+No conviertas un separador "-" en signo negativo sin evidencia documental.
 
 ==================================================
-VALIDACIÓN FINAL
+VALIDACIÓN ANTES DE RESPONDER
 ==================================================
 
-Antes de responder, comprobá que:
+Primero identificá los TOTALES DEL PIE.
+Después revisá las líneas y sus signos.
+Finalmente comprobá, cuando el documento lo permita, que:
+
 subtotal neto + IVA + impuestos internos + percepciones + otros cargos = total final
-respetando los signos y el redondeo del comprobante.
 
-Si las líneas no permiten reconstruir exactamente el total, conservá los totales del pie de la
-factura y no inventes valores de línea.
+respetando signos y redondeo.
+
+Si las líneas NO permiten reconstruir exactamente el total del pie, NO fuerces las líneas para que
+coincidan. Conservá los importes oficiales del pie y devolvé los valores de línea que realmente se
+puedan leer. La aplicación validará la diferencia y pedirá revisión en lugar de guardar un total
+incorrecto.
 `
 
   const contenido = mimeType === "application/pdf"
