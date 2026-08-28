@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase/client"
 import { useRouter } from "next/navigation"
 
@@ -12,6 +12,30 @@ export default function ResetPasswordPage() {
   const [message, setMessage] = useState("")
   const [error, setError] = useState("")
   const [loading, setLoading] = useState(false)
+  const [ready, setReady] = useState(false)
+
+  useEffect(() => {
+    const supabase = createClient()
+
+    // Supabase delivers password recovery as a PASSWORD_RECOVERY event in
+    // the browser. Once that event fires, updateUser() is authorized.
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((event) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setReady(true)
+        setError("")
+      }
+    })
+
+    // Handles a recovery session that was already detected before the
+    // component mounted.
+    supabase.auth.getSession().then(({ data }) => {
+      if (data.session) setReady(true)
+    })
+
+    return () => subscription.unsubscribe()
+  }, [])
 
   async function updatePassword(e: React.FormEvent) {
     e.preventDefault()
@@ -33,9 +57,7 @@ export default function ResetPasswordPage() {
 
     const supabase = createClient()
 
-    const { error } = await supabase.auth.updateUser({
-      password,
-    })
+    const { error } = await supabase.auth.updateUser({ password })
 
     setLoading(false)
 
@@ -59,7 +81,9 @@ export default function ResetPasswordPage() {
         </h1>
 
         <p className="mb-6 text-center text-sm text-gray-600">
-          Ingresá tu nueva contraseña.
+          {ready
+            ? "Ingresá tu nueva contraseña."
+            : "Verificando el enlace de recuperación..."}
         </p>
 
         <form onSubmit={updatePassword} className="space-y-4">
@@ -67,14 +91,14 @@ export default function ResetPasswordPage() {
             <label className="mb-1 block text-sm font-medium">
               Nueva contraseña
             </label>
-
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
               required
               minLength={6}
-              className="w-full rounded border p-2"
+              disabled={!ready || loading}
+              className="w-full rounded border p-2 disabled:bg-gray-100"
               placeholder="********"
             />
           </div>
@@ -83,14 +107,14 @@ export default function ResetPasswordPage() {
             <label className="mb-1 block text-sm font-medium">
               Repetir contraseña
             </label>
-
             <input
               type="password"
               value={confirmPassword}
               onChange={(e) => setConfirmPassword(e.target.value)}
               required
               minLength={6}
-              className="w-full rounded border p-2"
+              disabled={!ready || loading}
+              className="w-full rounded border p-2 disabled:bg-gray-100"
               placeholder="********"
             />
           </div>
@@ -109,7 +133,7 @@ export default function ResetPasswordPage() {
 
           <button
             type="submit"
-            disabled={loading}
+            disabled={!ready || loading}
             className="w-full rounded bg-black p-2 text-white hover:opacity-80 disabled:opacity-50"
           >
             {loading ? "Actualizando..." : "Cambiar contraseña"}
