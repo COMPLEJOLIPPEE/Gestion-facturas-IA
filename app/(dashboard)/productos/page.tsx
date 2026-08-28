@@ -6,12 +6,15 @@ import PageContainer from "@/components/layout/PageContainer";
 import PageHeader from "@/components/layout/PageHeader";
 
 import { createClient } from "@/lib/supabase/server";
+import { canWrite, getCurrentRole } from "@/lib/auth/permissions";
 
 import { Producto } from "./columns";
 import ProductosTable from "./table";
 
 export default async function ProductosPage() {
   const supabase = await createClient();
+  const role = await getCurrentRole();
+  const writable = canWrite(role);
 
   const { data, error } = await supabase
     .from("productos")
@@ -54,16 +57,18 @@ export default async function ProductosPage() {
         title="Productos"
         description="Gestión de productos"
         actions={
-          <Link href="/productos/nuevo">
-            <Button>
-              <Plus className="h-4 w-4 mr-2" />
-              Nuevo producto
-            </Button>
-          </Link>
+          writable ? (
+            <Link href="/productos/nuevo">
+              <Button>
+                <Plus className="h-4 w-4 mr-2" />
+                Nuevo producto
+              </Button>
+            </Link>
+          ) : undefined
         }
       />
 
-      <ProductosTable productos={productos} />
+      <ProductosTable productos={productos} canEdit={writable} />
     </PageContainer>
   );
 }
