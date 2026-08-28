@@ -7,6 +7,7 @@ import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
 type DescuentoDetalle = { porcentaje?: number | null; importe?: number | null; descripcion?: string | null }
+type CargoInput = { descripcion: string; importe: number }
 type ItemInput = {
   producto_id: string
   cantidad: number
@@ -30,9 +31,7 @@ function numero(valor: unknown) {
   const resultado = Number(valor ?? 0)
   return Number.isFinite(resultado) ? resultado : 0
 }
-
 function redondear(valor: number) { return Number(valor.toFixed(2)) }
-
 const EMPRESA_COOKIE = "factura_ia_empresa_activa"
 
 export async function crearFactura(formData: FormData) {
@@ -42,39 +41,27 @@ export async function crearFactura(formData: FormData) {
 
   const cookieStore = await cookies()
   let empresaId = cookieStore.get(EMPRESA_COOKIE)?.value ?? null
-
   if (!empresaId) {
-    const { data: primerAcceso } = await supabase
-      .from("usuario_empresa")
-      .select("empresa_id")
-      .eq("usuario_id", user.id)
-      .eq("activo", true)
-      .order("created_at", { ascending: true })
-      .limit(1)
-      .maybeSingle()
+    const { data: primerAcceso } = await supabase.from("usuario_empresa").select("empresa_id").eq("usuario_id", user.id).eq("activo", true).order("created_at", { ascending: true }).limit(1).maybeSingle()
     empresaId = primerAcceso?.empresa_id ?? null
   }
-
   if (!empresaId) throw new Error("No hay una empresa activa configurada para este usuario.")
 
-  const { data: accesoEmpresa } = await supabase
-    .from("usuario_empresa")
-    .select("empresa_id")
-    .eq("usuario_id", user.id)
-    .eq("empresa_id", empresaId)
-    .eq("activo", true)
-    .maybeSingle()
-
+  const { data: accesoEmpresa } = await supabase.from("usuario_empresa").select("empresa_id").eq("usuario_id", user.id).eq("empresa_id", empresaId).eq("activo", true).maybeSingle()
   if (!accesoEmpresa) throw new Error("No tenés acceso a la empresa seleccionada.")
 
   const items: ItemInput[] = JSON.parse(String(formData.get("items") ?? "[]"))
-
   if (!items.length) throw new Error("La factura necesita al menos una línea de producto")
   if (items.some((item) => !item.producto_id)) throw new Error("Todas las líneas deben tener un producto seleccionado")
 
-  // Los totales enviados por el navegador son solo una representación de la
-  // pantalla. Se reconstruyen en servidor a partir de las líneas para no
-  // guardar importes inconsistentes con los productos/ajustes detectados.
+  let cargos: CargoInput[] = []
+  try {
+    cargos = JSON.parse(String(formData.get("cargos") ?? "[]"))
+  } catch {
+    throw new Error("Los cargos de la factura no tienen un formato válido.")
+  }
+  const totalCargos = cargos.reduce((acc, cargo) => acc + numero(cargo.importe), 0)
+
   const resumen = items.reduce((acc, item) => {
     const cantidad = Math.max(0, numero(item.cantidad))
     const precioUnitario = numero(item.precio_unitario)
@@ -86,21 +73,19 @@ export async function crearFactura(formData: FormData) {
     const porCantidad = item.tipo_bonificacion === "cantidad"
     const bonificacionImporte = porCantidad ? cantidadBonificada * Math.abs(precioUnitario) : bonificacion
     const subtotalNeto = esAjusteNegativo ? bruto : Math.max(0, bruto - descuento - bonificacionImporte)
-    const ivaImporte = esAjusteNegativo
-      ? numero(item.iva_importe)
-      : numero(item.iva_importe) !== 0 ? numero(item.iva_importe) : subtotalNeto * (numero(item.iva) / 100)
-    const impuestosInternos = numero(item.impuestos_internos)
+    const ivaImporte = numero(item.iva_importe) !== 0 ? numero(item.iva_importe) : subtotalNeto * (numero(item.iva) / 100)
     acc.subtotalBruto += bruto
     acc.descuentos += esAjusteNegativo ? Math.abs(bruto) : descuento + bonificacionImporte
     acc.subtotalNeto += subtotalNeto
     acc.iva += ivaImporte
-    acc.impuestosInternos += impuestosInternos
+    acc.impuestosInternos += numero(item.impuestos_internos)
     return acc
   }, { subtotalBruto: 0, descuentos: 0, subtotalNeto: 0, iva: 0, impuestosInternos: 0 })
 
   const subtotal = redondear(resumen.subtotalNeto)
   const iva = redondear(resumen.iva)
-  const total = redondear(subtotal + iva + redondear(resumen.impuestosInternos))
+  const impuestosInternos = redondear(resumen.impuestosInternos)
+  const total = redondear(subtotal + iva + impuestosInternos + totalCargos)
 
   const { data: factura, error: errorFactura } = await supabase.from("facturas").insert({
     numero: (formData.get("numero") as string) || null,
@@ -109,7 +94,10 @@ export async function crearFactura(formData: FormData) {
     proveedor_id: formData.get("proveedor_id") as string,
     empresa_id: empresaId,
     subtotal,
+    descuento_total: redondear(resumen.descuentos),
     iva,
+    impuestos_internos: impuestosInternos,
+    otros_cargos: redondear(totalCargos),
     total,
     estado: "pendiente",
   }).select("id").single()
@@ -128,9 +116,7 @@ export async function crearFactura(formData: FormData) {
     const bonificacionImporte = porCantidad ? cantidadBonificada * Math.abs(brutoUnitario) : bonificacion
     const subtotalNeto = esAjusteNegativo ? bruto : Math.max(0, bruto - descuento - bonificacionImporte)
     const precioNetoUnitario = cantidad > 0 ? subtotalNeto / cantidad : brutoUnitario
-    const ivaImporte = esAjusteNegativo
-      ? numero(item.iva_importe)
-      : numero(item.iva_importe) !== 0 ? numero(item.iva_importe) : subtotalNeto * (numero(item.iva) / 100)
+    const ivaImporte = numero(item.iva_importe) !== 0 ? numero(item.iva_importe) : subtotalNeto * (numero(item.iva) / 100)
     const impuestosInternos = numero(item.impuestos_internos)
     const descuentosDetalle = [...(item.descuentos ?? []), ...(item.grupo_descuento ? [{ descripcion: item.grupo_descuento, importe: descuento }] : [])]
 
@@ -145,7 +131,7 @@ export async function crearFactura(formData: FormData) {
       precio_final: redondear(precioNetoUnitario),
       precio_bruto_unitario: redondear(brutoUnitario),
       descuento_importe: redondear(descuento),
-      bonificacion_importe: redondear(bonificacion),
+      bonificacion_importe: redondear(bonificacionImporte),
       precio_neto_unitario: redondear(precioNetoUnitario),
       subtotal_neto: redondear(subtotalNeto),
       iva_importe: redondear(ivaImporte),
@@ -170,13 +156,7 @@ export async function crearFactura(formData: FormData) {
   }
 
   if (formData.get("pagar_al_cargar") === "1") {
-    await registrarPago(supabase, {
-      tipo: "factura",
-      comprobanteId: factura.id,
-      monto: Number(formData.get("pago_monto")),
-      formaPagoId: (formData.get("pago_forma_pago_id") as string) || null,
-      fecha: formData.get("pago_fecha") as string,
-    })
+    await registrarPago(supabase, { tipo: "factura", comprobanteId: factura.id, monto: Number(formData.get("pago_monto")), formaPagoId: (formData.get("pago_forma_pago_id") as string) || null, fecha: formData.get("pago_fecha") as string })
     revalidatePath("/pagos")
     revalidatePath("/dashboard")
   }
@@ -191,13 +171,10 @@ export async function crearProductoDesdeFactura(formData: FormData) {
   const nombre = String(formData.get("nombre") ?? "").trim()
   const costo = Number(formData.get("costo") ?? 0)
   if (!nombre) return { ok: false, error: "El nombre del producto es obligatorio." }
-
   const { data: existente } = await supabase.from("productos").select("id, nombre, codigo").ilike("nombre", nombre).maybeSingle()
   if (existente) return { ok: false, error: "Ya existe un producto con ese nombre.", producto: existente }
-
   const { data: producto, error } = await supabase.from("productos").insert({ nombre, costo_actual: costo, precio_venta: 0, activo: true }).select("id, nombre, codigo").single()
   if (error || !producto) return { ok: false, error: error?.message ?? "No fue posible crear el producto." }
-
   revalidatePath("/productos")
   return { ok: true, producto }
 }
