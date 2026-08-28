@@ -1,8 +1,4 @@
-export type TipoLineaIA =
-  | "producto"
-  | "descuento_linea"
-  | "descuento_agrupado"
-  | "ajuste"
+export type TipoLineaIA = "producto" | "descuento_linea" | "descuento_agrupado" | "ajuste"
 
 export type LineaExtraida = {
   descripcion: string
@@ -52,6 +48,7 @@ export type ComprobanteExtraido = {
   impuestos_internos_total: number | null
   percepciones: CargoExtraido[]
   otros_cargos: CargoExtraido[]
+  cargos: CargoExtraido[]
   total: number | null
   lineas: LineaExtraida[]
 }
