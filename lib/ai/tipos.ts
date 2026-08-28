@@ -9,43 +9,28 @@ export type LineaExtraida = {
   cantidad: number
   precio_unitario: number
   iva: number | null
-
   tipo_linea?: TipoLineaIA
-  /** true only when the document explicitly shows this line as a negative adjustment. */
   es_ajuste_negativo?: boolean
   codigo_proveedor?: string | null
-
   descuento?: number | null
   porcentaje_descuento?: number | null
   tipo_descuento?: string | null
-  descuentos?: {
-    porcentaje?: number | null
-    importe?: number | null
-    descripcion?: string | null
-  }[]
-
-  // Bonificaciones comerciales
+  descuentos?: { porcentaje?: number | null; importe?: number | null; descripcion?: string | null }[]
   bonificacion?: number | null
   bonificacion_importe?: number | null
   bonificacion_tipo?: string | null
   tipo_bonificacion?: string | null
   cantidad_bonificada?: number | null
   cantidad_bonificada_detalle?: number | null
-
-  // Precios y subtotales
   precio_bruto_unitario?: number | null
   precio_neto?: number | null
   precio_neto_unitario?: number | null
   subtotal_neto?: number | null
   precio_final?: number | null
-
-  // Impuestos
   iva_importe?: number | null
   impuestos_internos?: number | null
-
   grupo_descuento?: string | null
   aplica_a_descripciones?: string[]
-
   producto_id?: string
   score?: number
   confianza?: "alta" | "media" | "baja"
@@ -53,26 +38,22 @@ export type LineaExtraida = {
   fuente?: "alias" | "smartmatch" | "manual"
 }
 
-export type CargoExtraido = {
-  descripcion: string
-  importe: number
-}
+export type CargoExtraido = { descripcion: string; importe: number }
 
 export type ComprobanteExtraido = {
   proveedor_nombre: string | null
   numero: string | null
   fecha: string | null
   fecha_vencimiento: string | null
-
   subtotal_bruto: number | null
   descuento_total: number | null
   subtotal_neto: number | null
   iva_total: number | null
-  cargos: CargoExtraido[]
+  impuestos_internos_total: number | null
+  percepciones: CargoExtraido[]
+  otros_cargos: CargoExtraido[]
   total: number | null
   lineas: LineaExtraida[]
 }
 
-export type TipoComprobanteIA =
-  | "factura"
-  | "remito"
+export type TipoComprobanteIA = "factura" | "remito"
