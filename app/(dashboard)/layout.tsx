@@ -6,21 +6,16 @@ import EmpresaSelector from "./empresa/EmpresaSelector";
 
 const EMPRESA_COOKIE = "factura_ia_empresa_activa";
 
-export default async function DashboardLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
   const supabase = await createClient();
   const cookieStore = await cookies();
   const empresaCookie = cookieStore.get(EMPRESA_COOKIE)?.value ?? null;
-
   const { data: { user } } = await supabase.auth.getUser();
 
   const { data: accesos } = user
     ? await supabase
         .from("usuario_empresa")
-        .select("empresa_id, empresas(id, razon_social)")
+        .select("empresa_id, rol, empresas(id, razon_social)")
         .eq("usuario_id", user.id)
         .eq("activo", true)
     : { data: [] };
@@ -28,13 +23,18 @@ export default async function DashboardLayout({
   const empresas = (accesos ?? [])
     .map((acceso) => {
       const empresa = Array.isArray(acceso.empresas) ? acceso.empresas[0] : acceso.empresas;
-      return empresa ? { id: empresa.id, razon_social: empresa.razon_social } : null;
+      return empresa
+        ? { id: empresa.id, razon_social: empresa.razon_social }
+        : null;
     })
     .filter((empresa): empresa is { id: string; razon_social: string } => Boolean(empresa));
 
   const empresaActivaId = empresas.some((empresa) => empresa.id === empresaCookie)
     ? empresaCookie
     : empresas[0]?.id ?? null;
+
+  const rolActual =
+    accesos?.find((acceso) => acceso.empresa_id === empresaActivaId)?.rol ?? "consulta";
 
   return (
     <div className="flex min-h-screen bg-gray-100">
@@ -43,6 +43,11 @@ export default async function DashboardLayout({
 
         <EmpresaSelector empresas={empresas} empresaActivaId={empresaActivaId} />
 
+        <div className="mb-6 rounded-lg bg-gray-50 p-3 text-sm">
+          <div className="font-medium">Perfil</div>
+          <div className="capitalize text-gray-600">{rolActual}</div>
+        </div>
+
         <nav className="flex flex-col gap-3">
           <Link href="/dashboard" className="rounded p-2 hover:bg-gray-100">📊 Dashboard</Link>
           <Link href="/proveedores" className="rounded p-2 hover:bg-gray-100">🚚 Proveedores</Link>
@@ -50,6 +55,9 @@ export default async function DashboardLayout({
           <Link href="/facturas" className="rounded p-2 hover:bg-gray-100">📄 Facturas</Link>
           <Link href="/remitos" className="rounded p-2 hover:bg-gray-100">📝 Remitos</Link>
           <Link href="/pagos" className="rounded p-2 hover:bg-gray-100">💰 Pagos</Link>
+          {rolActual === "superadmin" && (
+            <Link href="/configuracion" className="rounded p-2 hover:bg-gray-100">⚙️ Configuración</Link>
+          )}
         </nav>
 
         <form action={logout} className="mt-10">
