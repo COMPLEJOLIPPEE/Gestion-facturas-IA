@@ -4,11 +4,12 @@ import { Plus } from "lucide-react";
 import { Alert, Button } from "@/components/ui";
 import PageContainer from "@/components/layout/PageContainer";
 import PageHeader from "@/components/layout/PageHeader";
+import { DataTable } from "@/components/DataTable";
 
 import { createClient } from "@/lib/supabase/server";
 import { canWrite, getCurrentRole } from "@/lib/auth/permissions";
 
-import { Producto } from "./columns";
+import { columns, Producto } from "./columns";
 import ProductosTable from "./table";
 
 export default async function ProductosPage() {
@@ -68,7 +69,15 @@ export default async function ProductosPage() {
         }
       />
 
-      <ProductosTable productos={productos} canEdit={writable} />
+      {writable ? (
+        <ProductosTable productos={productos} />
+      ) : (
+        <DataTable
+          columns={columns}
+          data={productos}
+          onView={(p) => `/productos/${p.id}`}
+        />
+      )}
     </PageContainer>
   );
 }
