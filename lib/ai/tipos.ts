@@ -2,6 +2,7 @@ export type TipoLineaIA =
   | "producto"
   | "descuento_linea"
   | "descuento_agrupado"
+  | "ajuste"
 
 export type LineaExtraida = {
   descripcion: string
@@ -10,6 +11,8 @@ export type LineaExtraida = {
   iva: number | null
 
   tipo_linea?: TipoLineaIA
+  /** true only when the document explicitly shows this line as a negative adjustment. */
+  es_ajuste_negativo?: boolean
   codigo_proveedor?: string | null
 
   descuento?: number | null
