@@ -52,6 +52,8 @@ export const schema = {
           descuento: { type: Type.NUMBER, nullable: true },
           porcentaje_descuento: { type: Type.NUMBER, nullable: true },
           tipo_descuento: { type: Type.STRING, nullable: true },
+          tipo_linea: { type: Type.STRING, nullable: true },
+          es_ajuste_negativo: { type: Type.BOOLEAN, nullable: true },
 
           descuentos: {
             type: Type.ARRAY,
