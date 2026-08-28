@@ -121,6 +121,15 @@ export async function extraerConOCRSpace(
     iva_total:
       null,
 
+    impuestos_internos_total:
+      null,
+
+    percepciones:
+      [],
+
+    otros_cargos:
+      [],
+
     cargos:
       [],
 
