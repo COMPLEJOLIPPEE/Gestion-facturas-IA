@@ -26,6 +26,9 @@ export const schema = {
     impuestos_internos_total: { type: Type.NUMBER, nullable: true },
     percepciones: cargoSchema,
     otros_cargos: cargoSchema,
+    // Compatibilidad con el formulario actual: contiene percepciones,
+    // impuestos internos y otros cargos que deben sumarse al total.
+    cargos: cargoSchema,
     total: { type: Type.NUMBER, nullable: true },
     lineas: {
       type: Type.ARRAY,
@@ -72,5 +75,5 @@ export const schema = {
       },
     },
   },
-  required: ["lineas"],
+  required: ["lineas", "cargos"],
 }
