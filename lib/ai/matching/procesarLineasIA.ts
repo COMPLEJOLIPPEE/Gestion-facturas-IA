@@ -55,7 +55,8 @@ function extraerDescripcionObjetivo(descuento: LineaIA) {
   if (descuento.aplica_a_descripciones?.length) return descuento.aplica_a_descripciones.map(normalizarTexto).filter(Boolean);
   const texto = normalizarTexto(descuento.descripcion);
   const sinPorcentaje = texto.replace(/\b\d+(?:[.,]\d+)?\s*%?\b/g, " ");
-  return sinPorcentaje.replace(/\b(descuento|descuento de|off|dto|bonificacion|bonificaci[oó]n)\b/g, " ").replace(/\s+/g, " ").trim() ? [sinPorcentaje.replace(/\b(descuento|descuento de|off|dto|bonificacion|bonificaci[oó]n)\b/g, " ").replace(/\s+/g, " ").trim()] : [];
+  const objetivo = sinPorcentaje.replace(/\b(descuento|descuento de|off|dto|bonificacion|bonificaci[oó]n)\b/g, " ").replace(/\s+/g, " ").trim();
+  return objetivo ? [objetivo] : [];
 }
 
 function coincideObjetivo(linea: LineaProcesada, objetivos: string[]) {
@@ -66,9 +67,17 @@ function coincideObjetivo(linea: LineaProcesada, objetivos: string[]) {
 
 function obtenerDescuentoAgrupado(descuento: LineaIA, linea: LineaProcesada) {
   const base = Math.max(0, numero(linea.cantidad) * Math.abs(numero(linea.precio_bruto_unitario ?? linea.precio_unitario)));
-  const porcentaje = descuento.porcentaje_descuento != null ? numero(descuento.porcentaje_descuento) : descuento.descuentos?.find((d) => d.porcentaje != null)?.porcentaje != null ? numero(descuento.descuentos.find((d) => d.porcentaje != null)?.porcentaje) : null;
+  const porcentaje = descuento.porcentaje_descuento != null
+    ? numero(descuento.porcentaje_descuento)
+    : descuento.descuentos?.find((d) => d.porcentaje != null)?.porcentaje != null
+      ? numero(descuento.descuentos.find((d) => d.porcentaje != null)?.porcentaje)
+      : null;
   if (porcentaje != null && porcentaje > 0) return redondear(base * porcentaje / 100);
-  const importe = descuento.descuento != null ? numero(descuento.descuento) : descuento.descuentos?.find((d) => d.importe != null)?.importe != null ? numero(descuento.descuentos.find((d) => d.importe != null)?.importe) : 0;
+  const importe = descuento.descuento != null
+    ? numero(descuento.descuento)
+    : descuento.descuentos?.find((d) => d.importe != null)?.importe != null
+      ? numero(descuento.descuentos.find((d) => d.importe != null)?.importe)
+      : 0;
   return redondear(Math.min(base, Math.abs(importe)));
 }
 
@@ -106,6 +115,7 @@ export async function procesarLineasIA(supabase: SupabaseClient, proveedorId: st
       if (descuentoImporte <= 0) continue;
       const financieros = datosFinancieros({
         ...linea,
+        descripcion: linea.descripcionLeida,
         descuento: descuentoImporte,
         subtotal_neto: undefined,
         precio_neto: undefined,
