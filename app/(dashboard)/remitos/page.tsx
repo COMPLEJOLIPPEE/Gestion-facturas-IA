@@ -13,6 +13,7 @@ import { calcularEstadoFactura } from "../facturas/utils/FacturaEstado";
 
 type Remito = {
   id: string;
+  codigo_interno: number;
   numero: string | null;
   fecha: string;
   fecha_vencimiento: string | null;
@@ -23,8 +24,11 @@ type Remito = {
   pagos: { monto: number }[];
 };
 
+const formatoCodigo = (codigo: number) => `R-${String(codigo).padStart(4, "0")}`;
+
 const columns: Column<Remito>[] = [
-  { key: "numero", label: "Número" },
+  { key: "codigo_interno", label: "ID", render: (r) => <span className="font-semibold">{formatoCodigo(r.codigo_interno)}</span> },
+  { key: "numero", label: "Remito proveedor" },
   { key: "proveedor", label: "Proveedor", render: (r) => r.proveedores?.nombre_fantasia ?? "—" },
   { key: "fecha", label: "Fecha", render: (r) => formatDateAR(r.fecha) },
   { key: "fecha_vencimiento", label: "Vencimiento", render: (r) => formatDateAR(r.fecha_vencimiento) },
@@ -61,11 +65,11 @@ export default async function RemitosPage({
   ]);
 
   let query = supabase.from("remitos").select(`
-    id, numero, fecha, fecha_vencimiento, monto_total, proveedor_id, empresa_id,
+    id, codigo_interno, numero, fecha, fecha_vencimiento, monto_total, proveedor_id, empresa_id,
     proveedores (nombre_fantasia), pagos (monto)
   `);
 
-  if (buscar) query = query.or(`numero.ilike.%${buscar}%`);
+  if (buscar) query = query.or(`numero.ilike.%${buscar}%,codigo_interno.eq.${Number.parseInt(buscar.replace(/[^0-9]/g, ""), 10) || 0}`);
   if (proveedorFiltro) query = query.eq("proveedor_id", proveedorFiltro);
   if (empresaFiltro) query = query.eq("empresa_id", empresaFiltro);
 
