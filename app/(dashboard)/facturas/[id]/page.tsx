@@ -3,6 +3,7 @@ import { notFound } from "next/navigation"
 import { PagoInlineForm } from "@/components/PagoInlineForm"
 import { formatDateAR } from "@/lib/utils"
 import { registrarPagoFactura } from "./actions"
+import { calcularEstadoFactura } from "../utils/FacturaEstado"
 
 type Props = {
   params: Promise<{ id: string }>
@@ -56,7 +57,13 @@ export default async function FacturaDetallePage({ params }: Props) {
   ])
 
   const totalPagado = (pagos ?? []).reduce((acc, p) => acc + Number(p.monto ?? 0), 0)
-  const saldoPendiente = Math.max(Number(factura.total ?? 0) - totalPagado, 0)
+  const totalFactura = Number(factura.total ?? 0)
+  const saldoPendiente = Math.max(totalFactura - totalPagado, 0)
+  const estadoCalculado = calcularEstadoFactura({
+    total: totalFactura,
+    pagado: totalPagado,
+    fechaVencimiento: factura.fecha_vencimiento,
+  })
   const registrarPago = registrarPagoFactura.bind(null, factura.id)
 
   return (
@@ -77,13 +84,11 @@ export default async function FacturaDetallePage({ params }: Props) {
         </div>
         <div>
           <p className="text-sm text-gray-500">Vencimiento</p>
-          <p className="font-medium">
-            {formatDateAR(factura.fecha_vencimiento)}
-          </p>
+          <p className="font-medium">{formatDateAR(factura.fecha_vencimiento)}</p>
         </div>
         <div>
           <p className="text-sm text-gray-500">Estado</p>
-          <p className="font-medium">{factura.estado ?? "—"}</p>
+          <p className="font-medium">{estadoCalculado}</p>
         </div>
       </div>
 
@@ -106,12 +111,8 @@ export default async function FacturaDetallePage({ params }: Props) {
                 <td className="p-3 font-medium">{item.productos?.nombre ?? "—"}</td>
                 <td className="p-3">{item.productos?.unidad_medida ?? "—"}</td>
                 <td className="p-3 text-right">{item.cantidad}</td>
-                <td className="p-3 text-right">
-                  ${Number(item.precio_unitario ?? 0).toLocaleString("es-AR")}
-                </td>
-                <td className="p-3 text-right">
-                  ${(Number(item.cantidad ?? 0) * Number(item.precio_unitario ?? 0)).toLocaleString("es-AR")}
-                </td>
+                <td className="p-3 text-right">${Number(item.precio_unitario ?? 0).toLocaleString("es-AR")}</td>
+                <td className="p-3 text-right">${(Number(item.cantidad ?? 0) * Number(item.precio_unitario ?? 0)).toLocaleString("es-AR")}</td>
               </tr>
             ))}
           </tbody>
@@ -129,7 +130,7 @@ export default async function FacturaDetallePage({ params }: Props) {
             </div>
             <div className="flex justify-between font-semibold">
               <span>Total</span>
-              <span>${Number(factura.total ?? 0).toLocaleString("es-AR")}</span>
+              <span>${totalFactura.toLocaleString("es-AR")}</span>
             </div>
           </div>
         </div>
