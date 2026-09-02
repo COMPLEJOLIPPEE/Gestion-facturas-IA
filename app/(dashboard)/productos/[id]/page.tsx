@@ -57,6 +57,7 @@ export default async function ProductoDetalle({ params }: Props) {
   });
 
   const ultimaCompra = historialConVariacion[0] ?? null;
+  const ultimoCosto = ultimaCompra?.precio ?? Number(producto.ultimo_costo ?? producto.costo_actual ?? 0);
 
   return (
     <PageContainer>
@@ -67,7 +68,7 @@ export default async function ProductoDetalle({ params }: Props) {
         <div><span className="text-gray-500">Unidad de medida</span><p className="mt-1 font-medium">{producto.unidad_medida || "—"}</p></div>
         <div><span className="text-gray-500">Estado</span><div className="mt-1"><Badge variant={producto.activo ? "success" : "danger"}>{producto.activo ? "Activo" : "Inactivo"}</Badge></div></div>
         <div><span className="text-gray-500">Costo actual</span><p className="mt-1 font-medium">{money(producto.costo_actual)}</p></div>
-        <div><span className="text-gray-500">Último costo</span><p className="mt-1 font-medium">{money(producto.ultimo_costo)}</p></div>
+        <div><span className="text-gray-500">Último costo</span><p className="mt-1 font-medium">{money(ultimoCosto)}</p></div>
         <div><span className="text-gray-500">Precio de venta</span><p className="mt-1 font-medium">{money(producto.precio_venta)}</p></div>
       </div>
 
