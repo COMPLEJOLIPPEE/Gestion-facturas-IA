@@ -57,7 +57,7 @@ async function registrarPagoFactura(supabase: SupabaseClient, params: ParamsPago
   }
 
   const totalPagado = totalPagadoAntes + monto
-  const nuevoEstado = totalPagado >= total ? "pagado" : totalPagado > 0 ? "parcial" : "pendiente"
+  const nuevoEstado = totalPagado >= total ? "pagada" : totalPagado > 0 ? "parcial" : "pendiente"
 
   const { error: errorUpdate } = await supabase
     .from("facturas")
