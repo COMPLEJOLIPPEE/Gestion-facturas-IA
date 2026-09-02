@@ -52,35 +52,33 @@ export async function crearRemito(formData: FormData) {
   const itemsRaw = formData.get("items") as string
   const items: ItemInput[] = JSON.parse(itemsRaw || "[]")
 
-  if (items.length === 0) {
-    throw new Error("El remito necesita al menos una línea de producto")
-  }
-  if (items.some((item) => !item.producto_id)) {
-    throw new Error("Todas las líneas del remito deben tener un producto seleccionado")
-  }
+  if (items.length === 0) throw new Error("El remito necesita al menos una línea de producto")
+  if (items.some((item) => !item.producto_id)) throw new Error("Todas las líneas del remito deben tener un producto seleccionado")
 
   const itemsProcesados = items.map((item) => {
-    const bruto = Number(item.cantidad ?? 0) * Number(item.precio_unitario ?? 0)
-    const descuento = Math.max(0, Number(item.descuento ?? 0))
+    const cantidad = Math.max(0, Number(item.cantidad ?? 0))
+    const precioUnitario = Math.max(0, Number(item.precio_unitario ?? 0))
+    const bruto = cantidad * precioUnitario
+    const porcentaje = Math.min(100, Math.max(0, Number(item.descuento ?? 0)))
+    const descuentoImporte = bruto * (porcentaje / 100)
     const bonificacion = Math.max(0, Number(item.bonificacion_importe ?? 0))
-    const neto = Math.max(0, bruto - descuento - bonificacion)
+    const neto = Math.max(0, bruto - descuentoImporte - bonificacion)
 
     return {
       ...item,
-      precio_bruto_unitario: Number(item.precio_unitario ?? 0),
-      descuento_importe: descuento,
+      cantidad,
+      precio_unitario: precioUnitario,
+      precio_bruto_unitario: precioUnitario,
+      descuento_importe: descuentoImporte,
       bonificacion_importe: bonificacion,
-      precio_neto_unitario:
-        Number(item.cantidad ?? 0) > 0 ? neto / Number(item.cantidad) : 0,
+      precio_neto_unitario: cantidad > 0 ? neto / cantidad : 0,
       subtotal_neto: neto,
       precio_final: neto,
+      porcentaje_descuento: porcentaje,
     }
   })
 
-  const total = itemsProcesados.reduce(
-    (acumulado, item) => acumulado + item.subtotal_neto,
-    0
-  )
+  const total = itemsProcesados.reduce((acumulado, item) => acumulado + item.subtotal_neto, 0)
 
   const { data: remito, error: errorRemito } = await supabase
     .from("remitos")
@@ -95,9 +93,7 @@ export async function crearRemito(formData: FormData) {
     .select("id")
     .single()
 
-  if (errorRemito || !remito) {
-    throw new Error(`Error creando remito: ${errorRemito?.message}`)
-  }
+  if (errorRemito || !remito) throw new Error(`Error creando remito: ${errorRemito?.message}`)
 
   const itemsParaGuardar = itemsProcesados.map((item) => ({
     remito_id: remito.id,
@@ -118,17 +114,13 @@ export async function crearRemito(formData: FormData) {
     cantidad_bonificada: item.cantidad_bonificada ?? null,
   }))
 
-  // Las columnas nuevas de remito_items todavía no están reflejadas en
-  // lib/database.types.ts; la estructura ya fue creada en Supabase.
   const { error: errorItems } = await supabase
     .from("remito_items")
     .insert(itemsParaGuardar as never)
 
   if (errorItems) {
     const { error: rollback } = await supabase.from("remitos").delete().eq("id", remito.id)
-    if (rollback) {
-      throw new Error(`Error guardando items: ${errorItems.message}. No se pudo eliminar el remito incompleto: ${rollback.message}`)
-    }
+    if (rollback) throw new Error(`Error guardando items: ${errorItems.message}. No se pudo eliminar el remito incompleto: ${rollback.message}`)
     throw new Error(`Error guardando items: ${errorItems.message}`)
   }
 
