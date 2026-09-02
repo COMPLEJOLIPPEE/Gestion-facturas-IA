@@ -162,3 +162,40 @@ export async function crearRemito(formData: FormData) {
   revalidatePath("/productos")
   redirect(`/remitos/${remito.id}`)
 }
+
+export async function crearProductoDesdeRemito(formData: FormData) {
+  const supabase = await createClient()
+  const nombre = String(formData.get("nombre") ?? "").trim()
+  const costo = Number(formData.get("costo") ?? 0)
+
+  if (!nombre) return { ok: false, error: "El nombre del producto es obligatorio." }
+  if (!Number.isFinite(costo) || costo < 0) return { ok: false, error: "El costo del producto no es válido." }
+
+  const { data: existente } = await supabase
+    .from("productos")
+    .select("id, nombre, codigo")
+    .ilike("nombre", nombre)
+    .maybeSingle()
+
+  if (existente) {
+    return { ok: false, error: "Ya existe un producto con ese nombre.", producto: existente }
+  }
+
+  const { data: producto, error } = await supabase
+    .from("productos")
+    .insert({
+      nombre,
+      costo_actual: costo,
+      precio_venta: 0,
+      activo: true,
+    })
+    .select("id, nombre, codigo")
+    .single()
+
+  if (error || !producto) {
+    return { ok: false, error: error?.message ?? "No fue posible crear el producto." }
+  }
+
+  revalidatePath("/productos")
+  return { ok: true, producto }
+}
