@@ -27,6 +27,17 @@ type RemitoItem = {
   productos: ProductoRelacionado | ProductoRelacionado[] | null
 }
 
+type RemitoDetalle = {
+  id: string
+  codigo_interno: number
+  numero: string | null
+  fecha: string
+  monto_total: number | null
+  estado: string | null
+  proveedores: { nombre_fantasia: string | null } | { nombre_fantasia: string | null }[] | null
+  empresas: { razon_social: string | null } | { razon_social: string | null }[] | null
+}
+
 function normalizarProducto(producto: RemitoItem["productos"]): ProductoRelacionado | null {
   return Array.isArray(producto) ? producto[0] ?? null : producto ?? null
 }
@@ -39,7 +50,7 @@ export default async function RemitoDetallePage({ params }: Props) {
   const { id } = await params
   const supabase = await createClient()
 
-  const { data: remito, error } = await supabase
+  const { data: remitoRaw, error } = await supabase
     .from("remitos")
     .select(`
       id,
@@ -53,6 +64,8 @@ export default async function RemitoDetallePage({ params }: Props) {
     `)
     .eq("id", id)
     .single()
+
+  const remito = remitoRaw as unknown as RemitoDetalle | null
 
   if (error || !remito) notFound()
 
