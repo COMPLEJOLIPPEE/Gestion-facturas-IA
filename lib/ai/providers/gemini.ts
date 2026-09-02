@@ -56,7 +56,7 @@ ${DICCIONARIO_IMPUESTOS_INTERNOS}
 
 IMPORTANTE: no leas la factura solamente como texto lineal. Es una tabla.
 Reconstruí la relación visual entre encabezado, columna y fila.
-Si el encabezado dice "I. INTERNOS", el número alineado debajo de ese encabezado pertenece a `impuestos_internos`.
+Si el encabezado dice "I. INTERNOS", el número alineado debajo de ese encabezado pertenece al campo impuestos_internos.
 Esto debe hacerse aunque el OCR escriba el encabezado como I.I, IMP INT, IMP. INTERNOS, etc.
 
 ==================================================
@@ -74,10 +74,10 @@ Identificá proveedor, número, fechas y los importes del PIE/RESUMEN:
 - total final
 
 Los importes del PIE/RESUMEN son la fuente de verdad.
-Si el pie muestra impuestos internos, cargalos en `impuestos_internos_total`.
-Si muestra percepciones u otros cargos que forman parte del total, cargalos en `cargos`.
+Si el pie muestra impuestos internos, cargalos en el campo impuestos_internos_total.
+Si muestra percepciones u otros cargos que forman parte del total, cargalos en cargos.
 
-Si existe una columna de impuestos internos, extraé TAMBIÉN el importe de cada fila en `impuestos_internos`.
+Si existe una columna de impuestos internos, extraé TAMBIÉN el importe de cada fila en el campo impuestos_internos.
 El total de impuestos internos debe ser consistente con la suma de esas líneas, salvo redondeos.
 
 No inventes información. Si una columna de impuestos internos no existe en el documento, usá 0 en las líneas y null para el total si tampoco aparece en el pie.
@@ -92,21 +92,21 @@ Un importe es negativo solamente cuando el documento muestra evidencia clara de 
 Nunca conviertas un importe negativo en positivo por tu cuenta.
 
 Para cada línea indicá tipo_linea: producto, descuento_linea, descuento_agrupado o ajuste.
-`es_ajuste_negativo` es true solamente cuando el documento confirme que la línea es un ajuste negativo.
+es_ajuste_negativo es true solamente cuando el documento confirme que la línea es un ajuste negativo.
 
 ==================================================
 PRODUCTOS, DESCUENTOS, IVA E IMPUESTOS
 ==================================================
 
 Para cada línea identificá:
-descripcion, codigo_proveedor, cantidad, cantidad_bonificada, precio_unitario,
-precio_bruto_unitario, descuento, porcentaje_descuento, descuentos, grupo_descuento,
-bonificacion, tipo_bonificacion, cantidad_bonificada_detalle, precio_neto,
-precio_neto_unitario, precio_final, subtotal_neto, iva, iva_importe, impuestos_internos.
+descripcion, codigo_proveedor, cantidad, precio_unitario, precio_bruto_unitario,
+descuento, porcentaje_descuento, descuentos, grupo_descuento, bonificacion,
+tipo_bonificacion, cantidad_bonificada_detalle, precio_neto, precio_neto_unitario,
+precio_final, subtotal_neto, iva, iva_importe, impuestos_internos.
 
-`iva` es la alícuota en porcentaje.
-`iva_importe` es el importe de IVA de la línea.
-`impuestos_internos` es exclusivamente el importe de la columna de impuestos internos.
+iva es la alícuota en porcentaje.
+iva_importe es el importe de IVA de la línea.
+impuestos_internos es EXCLUSIVAMENTE el importe de la columna de impuestos internos.
 
 Para una línea negativa confirmada, conservá los signos negativos de precio/subtotal/IVA cuando correspondan.
 Para una línea normal, precio_unitario debe ser positivo salvo indicación expresa del documento.
