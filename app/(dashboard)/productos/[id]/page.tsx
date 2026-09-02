@@ -5,7 +5,7 @@ import { createClient } from "@/lib/supabase/server";
 
 type Props = { params: Promise<{ id: string }> };
 
-const money = (value: number) =>
+const money = (value: number | null | undefined) =>
   `$${Number(value ?? 0).toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
 export default async function ProductoDetalle({ params }: Props) {
