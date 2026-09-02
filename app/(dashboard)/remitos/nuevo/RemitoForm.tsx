@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from "react"
 
-import { crearRemito } from "./actions"
+import { crearProductoDesdeRemito, crearRemito } from "./actions"
 import CargaIA from "./components/CargaIA"
 import DatosComprobante from "./components/DatosComprobante"
 import ProductosRemito, { LineaRemito } from "./components/ProductosRemito"
@@ -24,6 +24,7 @@ type Props = {
 
 export function RemitoForm({ proveedores, empresas, productos, formasPago }: Props) {
   const [lineas, setLineas] = useState<LineaRemito[]>([])
+  const [productosDisponibles, setProductosDisponibles] = useState<Producto[]>(productos)
   const [proveedorId, setProveedorId] = useState("")
   const [numero, setNumero] = useState("")
   const [fecha, setFecha] = useState("")
@@ -67,6 +68,32 @@ export function RemitoForm({ proveedores, empresas, productos, formasPago }: Pro
     setLineas((prev) =>
       prev.map((linea, i) => (i === index ? { ...linea, producto_id: productoId } : linea))
     )
+  }
+
+  const crearProductoDesdeLinea = async (index: number, nombre: string, costo: number) => {
+    const formData = new FormData()
+    formData.set("nombre", nombre)
+    formData.set("costo", String(costo))
+
+    const resultado = await crearProductoDesdeRemito(formData)
+
+    if (!resultado.ok) {
+      alert(resultado.error)
+      if (resultado.producto) {
+        setProductosDisponibles((prev) =>
+          prev.some((producto) => producto.id === resultado.producto!.id)
+            ? prev
+            : [...prev, resultado.producto!]
+        )
+        actualizarProductoDeLinea(index, resultado.producto.id)
+      }
+      return
+    }
+
+    if (resultado.producto) {
+      setProductosDisponibles((prev) => [...prev, resultado.producto!])
+      actualizarProductoDeLinea(index, resultado.producto.id)
+    }
   }
 
   const calcularLinea = (linea: LineaRemito) => {
@@ -151,7 +178,7 @@ export function RemitoForm({ proveedores, empresas, productos, formasPago }: Pro
     if (datos.lineas.length > 0) {
       setLineas(
         datos.lineas.map((l) => {
-          const match = matchearProducto(l.descripcion, productos)
+          const match = matchearProducto(l.descripcion, productosDisponibles)
           const bruto = Number(l.cantidad || 1) * Number(l.precio_unitario || 0)
           const descuentoImporteIA = Math.max(0, Number(l.descuento ?? 0))
           const porcentajeIA = l.porcentaje_descuento != null
@@ -238,7 +265,15 @@ export function RemitoForm({ proveedores, empresas, productos, formasPago }: Pro
 
       <DatosComprobante proveedores={proveedores} empresas={empresas} proveedorId={proveedorId} setProveedorId={setProveedorId} numero={numero} setNumero={setNumero} fecha={fecha} setFecha={setFecha} fechaVencimiento={fechaVencimiento} setFechaVencimiento={setFechaVencimiento} />
 
-      <ProductosRemito productos={productos} lineas={lineas} agregarLinea={agregarLinea} quitarLinea={quitarLinea} actualizarLinea={actualizarLinea} actualizarProductoDeLinea={actualizarProductoDeLinea} />
+      <ProductosRemito
+        productos={productosDisponibles}
+        lineas={lineas}
+        agregarLinea={agregarLinea}
+        quitarLinea={quitarLinea}
+        actualizarLinea={actualizarLinea}
+        actualizarProductoDeLinea={actualizarProductoDeLinea}
+        crearProductoDesdeLinea={crearProductoDesdeLinea}
+      />
 
       <PagoRemito pagarAlCargar={pagarAlCargar} setPagarAlCargar={setPagarAlCargar} montoPagoMostrado={montoPagoMostrado} setMontoPago={setMontoPago} setPagoTocado={setPagoTocado} total={total} formasPago={formasPago} />
 
