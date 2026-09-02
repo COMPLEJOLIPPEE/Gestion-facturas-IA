@@ -89,7 +89,7 @@ export type Database = {
       }
       pagos: {
         Row: { created_at: string | null; factura_id: string | null; fecha: string; forma_pago_id: string | null; id: string; monto: number; remito_id: string | null }
-        Insert: { created_at?: string | null; factura_id?: string | null; fecha: string; forma_pago_id?: string | null; id?: string; monto: number; remito_id?: string | null }
+        Insert: { created_at?: string | null; factura_id?: string | null; fecha: string; forma_pago_id?: string | null; id?: string; monto?: number; remito_id?: string | null }
         Update: { created_at?: string | null; factura_id?: string | null; fecha?: string; forma_pago_id?: string | null; id?: string; monto?: number; remito_id?: string | null }
         Relationships: [
           { foreignKeyName: "pagos_factura_id_fkey"; columns: ["factura_id"]; isOneToOne: false; referencedRelation: "facturas"; referencedColumns: ["id"] },
@@ -99,8 +99,8 @@ export type Database = {
       }
       producto_aliases: {
         Row: { codigo_proveedor: string | null; confianza: number; created_at: string | null; descripcion_normalizada: string; descripcion_original: string; id: string; producto_id: string; proveedor_id: string; ultima_fecha: string | null; updated_at: string | null; veces_usado: number }
-        Insert: { codigo_proveedor?: string | null; confianza?: number; created_at?: string | null; descripcion_normalizada: string; descripcion_original: string; id?: string; producto_id: string; proveedor_id: string; ultima_fecha?: string | null; updated_at?: string | null; veces_usado?: number }
-        Update: { codigo_proveedor?: string | null; confianza?: number; created_at?: string | null; descripcion_normalizada?: string; descripcion_original?: string; id?: string; producto_id?: string; proveedor_id?: string; ultima_fecha?: string | null; updated_at?: string | null; veces_usado?: number }
+        Insert: { codigo_proveedor?: string | null; confianza?: number; created_at?: string; descripcion_normalizada: string; descripcion_original: string; id?: string; producto_id: string; proveedor_id: string; ultima_fecha?: string | null; updated_at?: string | null; veces_usado?: number }
+        Update: { codigo_proveedor?: string | null; confianza?: number; created_at?: string; descripcion_normalizada?: string; descripcion_original?: string; id?: string; producto_id?: string; proveedor_id?: string; ultima_fecha?: string | null; updated_at?: string | null; veces_usado?: number }
         Relationships: [
           { foreignKeyName: "producto_aliases_producto_id_fkey"; columns: ["producto_id"]; isOneToOne: false; referencedRelation: "productos"; referencedColumns: ["id"] },
           { foreignKeyName: "producto_aliases_proveedor_id_fkey"; columns: ["proveedor_id"]; isOneToOne: false; referencedRelation: "proveedores"; referencedColumns: ["id"] }
@@ -114,8 +114,8 @@ export type Database = {
       }
       proveedores: {
         Row: { activo: boolean | null; categoria_id: string | null; condicion_iva: string | null; condicion_pago: string | null; created_at: string | null; cuit: string | null; email: string | null; etiqueta_1: string | null; etiqueta_2: string | null; id: string; iibb_bsas: number | null; iibb_caba: number | null; nombre_fantasia: string; otros_cargos: string | null; razon_social: string | null; telefono: string | null }
-        Insert: { activo?: boolean | null; categoria_id?: string | null; condicion_iva?: string | null; condicion_pago?: string | null; created_at?: string | null; cuit?: string | null; email?: string | null; etiqueta_1?: string | null; etiqueta_2?: string | null; id?: string; iibb_bsas?: number | null; iibb_caba?: number | null; nombre_fantasia: string; otros_cargos?: string | null; razon_social?: string | null; telefono?: string | null }
-        Update: { activo?: boolean | null; categoria_id?: string | null; condicion_iva?: string | null; condicion_pago?: string | null; created_at?: string | null; cuit?: string | null; email?: string | null; etiqueta_1?: string | null; etiqueta_2?: string | null; id?: string; iibb_bsas?: number | null; iibb_caba?: number | null; nombre_fantasia?: string; otros_cargos?: string | null; razon_social?: string | null; telefono?: string | null }
+        Insert: { activo?: boolean; categoria_id?: string | null; condicion_iva?: string | null; condicion_pago?: string | null; created_at?: string | null; cuit?: string | null; email?: string | null; etiqueta_1?: string | null; etiqueta_2?: string | null; id?: string; iibb_bsas?: number | null; iibb_caba?: number | null; nombre_fantasia: string; otros_cargos?: string | null; razon_social?: string | null; telefono?: string | null }
+        Update: { activo?: boolean | null; categoria_id?: string | null; condicion_iva?: string | null; condicion_pago?: string | null; created_at?: string | null; cuit?: string | null; email?: string | null; etiqueta_1?: string | null; etiqueta_2?: string | null; id?: string; iibb_bsas?: number | null; iibb_caba?: number | null; nombre_fantasia?: string; otros_cargos?: string | null; telefono?: string | null }
         Relationships: [{ foreignKeyName: "proveedores_categoria_id_fkey"; columns: ["categoria_id"]; isOneToOne: false; referencedRelation: "categorias_proveedor"; referencedColumns: ["id"] }]
       }
       remito_items: {
@@ -128,9 +128,9 @@ export type Database = {
         ]
       }
       remitos: {
-        Row: { archivo_url: string | null; created_at: string | null; empresa_id: string | null; estado: string | null; fecha: string; fecha_vencimiento: string | null; id: string; monto_total: number; numero: string | null; proveedor_id: string | null }
-        Insert: { archivo_url?: string | null; created_at?: string | null; empresa_id?: string | null; estado?: string | null; fecha: string; fecha_vencimiento?: string | null; id?: string; monto_total: number; numero?: string | null; proveedor_id?: string | null }
-        Update: { archivo_url?: string | null; created_at?: string | null; empresa_id?: string | null; estado?: string | null; fecha?: string; fecha_vencimiento?: string | null; id?: string; monto_total?: number; numero?: string | null; proveedor_id?: string | null }
+        Row: { archivo_url: string | null; codigo_interno: number; created_at: string | null; empresa_id: string | null; estado: string | null; fecha: string; fecha_vencimiento: string | null; id: string; monto_total: number; numero: string | null; proveedor_id: string | null }
+        Insert: { archivo_url?: string | null; codigo_interno?: number; created_at?: string | null; empresa_id?: string | null; estado?: string | null; fecha: string; fecha_vencimiento?: string | null; id?: string; monto_total: number; numero?: string | null; proveedor_id?: string | null }
+        Update: { archivo_url?: string | null; codigo_interno?: number; created_at?: string | null; empresa_id?: string | null; estado?: string | null; fecha?: string; fecha_vencimiento?: string | null; id?: string; monto_total?: number; numero?: string | null; proveedor_id?: string | null }
         Relationships: [
           { foreignKeyName: "remitos_empresa_id_fkey"; columns: ["empresa_id"]; isOneToOne: false; referencedRelation: "empresas"; referencedColumns: ["id"] },
           { foreignKeyName: "remitos_proveedor_id_fkey"; columns: ["proveedor_id"]; isOneToOne: false; referencedRelation: "proveedores"; referencedColumns: ["id"] }
@@ -138,7 +138,7 @@ export type Database = {
       }
       usuario_empresa: {
         Row: { activo: boolean; created_at: string; empresa_id: string; rol: string; usuario_id: string }
-        Insert: { activo?: boolean; created_at?: string; empresa_id: string; rol?: string; usuario_id: string }
+        Insert: { activo?: boolean; created_at?: string; empresa_id: string; rol?: string; usuario_id?: string }
         Update: { activo?: boolean; created_at?: string; empresa_id?: string; rol?: string; usuario_id?: string }
         Relationships: [{ foreignKeyName: "usuario_empresa_empresa_id_fkey"; columns: ["empresa_id"]; isOneToOne: false; referencedRelation: "empresas"; referencedColumns: ["id"] }]
       }
