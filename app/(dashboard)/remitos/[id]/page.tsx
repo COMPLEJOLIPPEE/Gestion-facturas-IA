@@ -31,6 +31,10 @@ function normalizarProducto(producto: RemitoItem["productos"]): ProductoRelacion
   return Array.isArray(producto) ? producto[0] ?? null : producto ?? null
 }
 
+function formatoCodigo(codigo: number) {
+  return `R-${String(codigo).padStart(4, "0")}`
+}
+
 export default async function RemitoDetallePage({ params }: Props) {
   const { id } = await params
   const supabase = await createClient()
@@ -39,6 +43,7 @@ export default async function RemitoDetallePage({ params }: Props) {
     .from("remitos")
     .select(`
       id,
+      codigo_interno,
       numero,
       fecha,
       monto_total,
@@ -95,13 +100,17 @@ export default async function RemitoDetallePage({ params }: Props) {
   const totalPagado = (pagos ?? []).reduce((acc, p) => acc + Number(p.monto ?? 0), 0)
   const saldoPendiente = Math.max(Number(remito.monto_total ?? 0) - totalPagado, 0)
   const registrarPago = registrarPagoRemito.bind(null, remito.id)
+  const codigoInterno = formatoCodigo(Number(remito.codigo_interno))
 
   return (
     <div className="space-y-6">
       <div className="flex items-start justify-between">
         <div>
+          <div className="mb-3 inline-flex rounded-lg bg-black px-4 py-2 text-xl font-bold text-white">
+            {codigoInterno}
+          </div>
           <h1 className="text-3xl font-bold">📦 Comprobante de compra</h1>
-          <p className="mt-2 text-lg font-medium">{remito.numero ?? "Sin número"}</p>
+          <p className="mt-2 text-lg font-medium">Remito proveedor: {remito.numero ?? "Sin número"}</p>
           <p className="text-gray-600">{proveedor?.nombre_fantasia ?? "Sin proveedor"}</p>
           <p className="text-sm text-gray-500">
             {empresa?.razon_social ?? "Sin empresa"} · {formatDateAR(remito.fecha)}
