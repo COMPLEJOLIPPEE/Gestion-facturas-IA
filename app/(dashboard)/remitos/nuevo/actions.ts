@@ -2,6 +2,7 @@
 
 import { createClient } from "@/lib/supabase/server"
 import { registrarPago } from "@/lib/pagos"
+import { cookies } from "next/headers"
 import { revalidatePath } from "next/cache"
 import { redirect } from "next/navigation"
 
@@ -17,13 +18,45 @@ type ItemInput = {
   cantidad_bonificada?: number | null
 }
 
+const EMPRESA_COOKIE = "factura_ia_empresa_activa"
+
 export async function crearRemito(formData: FormData) {
   const supabase = await createClient()
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/login')
+
+  const cookieStore = await cookies()
+  let empresaId = cookieStore.get(EMPRESA_COOKIE)?.value ?? null
+  if (!empresaId) {
+    const { data: primerAcceso } = await supabase
+      .from("usuario_empresa")
+      .select("empresa_id")
+      .eq("usuario_id", user.id)
+      .eq("activo", true)
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle()
+    empresaId = primerAcceso?.empresa_id ?? null
+  }
+  if (!empresaId) throw new Error("No hay una empresa activa configurada para este usuario.")
+
+  const { data: accesoEmpresa } = await supabase
+    .from("usuario_empresa")
+    .select("empresa_id")
+    .eq("usuario_id", user.id)
+    .eq("empresa_id", empresaId)
+    .eq("activo", true)
+    .maybeSingle()
+  if (!accesoEmpresa) throw new Error("No tenés acceso a la empresa seleccionada.")
+
   const itemsRaw = formData.get("items") as string
   const items: ItemInput[] = JSON.parse(itemsRaw || "[]")
 
   if (items.length === 0) {
     throw new Error("El remito necesita al menos una línea de producto")
+  }
+  if (items.some((item) => !item.producto_id)) {
+    throw new Error("Todas las líneas del remito deben tener un producto seleccionado")
   }
 
   const itemsProcesados = items.map((item) => {
@@ -56,7 +89,7 @@ export async function crearRemito(formData: FormData) {
       fecha: formData.get("fecha") as string,
       fecha_vencimiento: (formData.get("fecha_vencimiento") as string) || null,
       proveedor_id: formData.get("proveedor_id") as string,
-      empresa_id: formData.get("empresa_id") as string,
+      empresa_id: empresaId,
       monto_total: total,
     })
     .select("id")
@@ -92,6 +125,10 @@ export async function crearRemito(formData: FormData) {
     .insert(itemsParaGuardar as never)
 
   if (errorItems) {
+    const { error: rollback } = await supabase.from("remitos").delete().eq("id", remito.id)
+    if (rollback) {
+      throw new Error(`Error guardando items: ${errorItems.message}. No se pudo eliminar el remito incompleto: ${rollback.message}`)
+    }
     throw new Error(`Error guardando items: ${errorItems.message}`)
   }
 
