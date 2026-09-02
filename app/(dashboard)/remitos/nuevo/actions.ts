@@ -160,7 +160,7 @@ export async function crearRemito(formData: FormData) {
 
   revalidatePath("/remitos")
   revalidatePath("/productos")
-  redirect(`/remitos/${remito.id}`)
+  redirect(`/remitos/${remito.id}/confirmacion`)
 }
 
 export async function crearProductoDesdeRemito(formData: FormData) {
