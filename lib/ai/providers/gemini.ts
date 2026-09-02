@@ -33,6 +33,19 @@ La posición visual de la columna debe conservarse aunque el OCR haya separado o
 Si la columna existe pero una fila está vacía, devolver 0 para esa fila.
 `
 
+const DICCIONARIO_DESCUENTOS = `
+REGLAS PARA DESCUENTOS Y BONIFICACIONES:
+- Nunca omitas una fila de la tabla que tenga descripción y un importe, aunque no sea un producto.
+- Una fila que represente una reducción del importe debe conservarse como línea y marcarse como descuento_linea, descuento_agrupado o ajuste.
+- Si la descripción combina un porcentaje con una marca/producto/presentación, es un descuento agrupado aunque no diga literalmente "descuento".
+- Ejemplos: "30 Power 500" significa 30% de descuento sobre los productos Powerade de 500 ml; "PWD 1.500-25%-PDV" significa 25% de descuento sobre los productos Powerade de 1,5 litros.
+- PWD, POW, POWER y POWERADE pueden referirse a la misma marca/producto según el comprobante.
+- 500, 500ML, 500X6 representan una presentación de 500 ml; 1.5L, 1.500, 1500ML representan una presentación de 1,5 litros.
+- Para un descuento agrupado, completá porcentaje_descuento y aplica_a_descripciones con una descripción suficientemente amplia para encontrar TODAS las líneas afectadas.
+- Si el comprobante muestra el importe total del descuento en el pie, también informalo en descuento_total.
+- No conviertas una línea de descuento agrupado en producto y no la asocies a un producto del catálogo.
+`
+
 export async function extraerConGemini(base64: string, mimeType: string, tipo: TipoComprobanteIA): Promise<ComprobanteExtraido> {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) throw new Error("Falta la variable de entorno GEMINI_API_KEY")
@@ -53,6 +66,11 @@ Devolvé únicamente un JSON válido siguiendo exactamente el schema recibido.
 DICCIONARIO DE COLUMNAS — OBLIGATORIO
 ==================================================
 ${DICCIONARIO_IMPUESTOS_INTERNOS}
+
+==================================================
+DESCUENTOS AGRUPADOS — OBLIGATORIO
+==================================================
+${DICCIONARIO_DESCUENTOS}
 
 IMPORTANTE: no leas la factura solamente como texto lineal. Es una tabla.
 Reconstruí la relación visual entre encabezado, columna y fila.
@@ -91,7 +109,8 @@ NO interpretes un guion "-" como signo negativo solamente porque aparece cerca d
 Un importe es negativo solamente cuando el documento muestra evidencia clara de que representa una reducción/ajuste.
 Nunca conviertas un importe negativo en positivo por tu cuenta.
 
-Para cada línea indicá tipo_linea: producto, descuento_linea, descuento_agrupado o ajuste.
+Para CADA fila comercial visible indicá tipo_linea: producto, descuento_linea, descuento_agrupado o ajuste.
+NO OMITAS filas de descuento, bonificación o ajuste aunque no tengan código de producto.
 es_ajuste_negativo es true solamente cuando el documento confirme que la línea es un ajuste negativo.
 
 ==================================================
@@ -103,6 +122,14 @@ descripcion, codigo_proveedor, cantidad, precio_unitario, precio_bruto_unitario,
 descuento, porcentaje_descuento, descuentos, grupo_descuento, bonificacion,
 tipo_bonificacion, cantidad_bonificada_detalle, precio_neto, precio_neto_unitario,
 precio_final, subtotal_neto, iva, iva_importe, impuestos_internos.
+
+Para una línea de descuento agrupado:
+- tipo_linea debe ser descuento_agrupado;
+- es_ajuste_negativo debe ser false;
+- no requiere producto_id;
+- porcentaje_descuento debe contener el porcentaje si aparece en la línea;
+- aplica_a_descripciones debe contener los productos/presentaciones afectados;
+- conservá la descripción original completa.
 
 iva es la alícuota en porcentaje.
 iva_importe es el importe de IVA de la línea.
@@ -117,6 +144,8 @@ VALIDACIÓN
 
 Comprobá cuando sea posible:
 subtotal neto + IVA + impuestos internos + cargos = total final
+
+Comprobá también que el descuento_total del pie sea compatible con la suma de descuentos/bonificaciones identificados.
 
 No fuerces las líneas para hacer coincidir el total. Conservá los importes oficiales del pie.
 `
