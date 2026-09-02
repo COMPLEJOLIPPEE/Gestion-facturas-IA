@@ -12,7 +12,6 @@ import { procesarLineasIA } from "./matching/procesarLineasIA"
 
 import type {
   ComprobanteExtraido,
-  CargoExtraido,
 } from "./tipos"
 
 function numero(valor: unknown) {
@@ -29,16 +28,41 @@ function asegurarImpuestosInternosEnCargos(datos: ComprobanteExtraido): Comproba
   if (importeTotal <= 0) return datos
 
   const cargosActuales = [...(datos.cargos ?? [])]
-  const yaExiste = cargosActuales.some((cargo) => {
+  const yaExisteCargoInterno = cargosActuales.some((cargo) => {
     const descripcion = normalizarTexto(cargo.descripcion)
     return descripcion.includes("impuesto interno") || descripcion.includes("impuestos internos") || descripcion.includes("imp interno") || descripcion.includes("imp internos")
   })
 
-  if (!yaExiste) {
-    cargosActuales.push({ descripcion: "Impuestos internos", importe: importeTotal })
-  }
+  if (yaExisteCargoInterno) return datos
+
+  // Si Gemini ya identificó impuestos internos por línea, no debemos volver
+  // a sumar el total completo como cargo: eso duplicaría el importe.
+  const impuestosPorLinea = (datos.lineas ?? []).reduce(
+    (suma, linea) => suma + Math.abs(numero(linea.impuestos_internos)),
+    0
+  )
+
+  const diferencia = importeTotal - impuestosPorLinea
+  if (impuestosPorLinea > 0 && diferencia <= 0.5) return datos
+
+  // Si faltó una parte del impuesto en las líneas, solo agregamos el residual.
+  // Si no hubo ningún impuesto por línea, agregamos el total completo.
+  const importeCargo = impuestosPorLinea > 0
+    ? Math.max(0, diferencia)
+    : importeTotal
+
+  if (importeCargo <= 0.01) return datos
+
+  cargosActuales.push({
+    descripcion: "Impuestos internos",
+    importe: redondear(importeCargo),
+  })
 
   return { ...datos, cargos: cargosActuales }
+}
+
+function redondear(valor: number) {
+  return Number(valor.toFixed(2))
 }
 
 /**
@@ -99,11 +123,25 @@ export async function procesarLineasFacturaConIA(
 ) {
   const supabase = await createClient()
 
+  // El catálogo de Supabase es la fuente de verdad para el matching.
+  // No dependemos de que el Server Component haya podido hidratar el
+  // catálogo en el navegador. Si la lista recibida está vacía o desactualizada,
+  // la recuperamos directamente desde la base.
+  let catalogo = productos
+  const { data: productosBD, error: errorProductos } = await supabase
+    .from("productos")
+    .select("id, nombre")
+    .order("nombre")
+
+  if (!errorProductos && productosBD && productosBD.length > 0) {
+    catalogo = productosBD
+  }
+
   return procesarLineasIA(
     supabase,
     proveedorId,
     lineas,
-    productos
+    catalogo
   )
 }
 
