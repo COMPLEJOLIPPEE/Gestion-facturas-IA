@@ -33,6 +33,7 @@ type Props = {
     valor: string | number
   ) => void;
   actualizarProductoDeLinea: (index: number, productoId: string) => void;
+  crearProductoDesdeLinea: (index: number, nombre: string, costo: number) => Promise<void>;
 };
 
 const money = (value: number) =>
@@ -48,6 +49,7 @@ export default function ProductosRemito({
   quitarLinea,
   actualizarLinea,
   actualizarProductoDeLinea,
+  crearProductoDesdeLinea,
 }: Props) {
   return (
     <div className="rounded-xl bg-white p-6 shadow">
@@ -97,11 +99,22 @@ export default function ProductosRemito({
                       <option key={producto.id} value={producto.id}>{producto.nombre}</option>
                     ))}
                   </select>
+
+                  {!linea.producto_id && linea.descripcionLeida && (
+                    <button
+                      type="button"
+                      onClick={() => crearProductoDesdeLinea(index, linea.descripcionLeida ?? "", Math.abs(Number(linea.precio_unitario ?? 0)))}
+                      className="mt-2 w-full rounded-md bg-green-600 px-3 py-2 text-xs font-semibold text-white hover:bg-green-700"
+                    >
+                      + Crear este producto
+                    </button>
+                  )}
+
                   {linea.autoMatcheado && <p className="mt-1 text-xs text-green-600">🟢 Producto reconocido automáticamente</p>}
                   {!linea.autoMatcheado && linea.descripcionLeida && (
                     <div className="mt-2 rounded-md bg-red-50 p-2">
                       <p className="text-xs font-semibold text-red-700">🔴 Producto no reconocido</p>
-                      <p className="text-xs text-red-700">Seleccione el producto correcto.</p>
+                      <p className="text-xs text-red-700">Seleccione el producto correcto o créelo con el botón anterior.</p>
                     </div>
                   )}
                   {linea.descripcionLeida && (
