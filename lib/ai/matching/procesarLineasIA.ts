@@ -22,14 +22,15 @@ function normalizarTipoBonificacion(valor: string | null | undefined): TipoBonif
 }
 function numero(valor: unknown) { const resultado = Number(valor ?? 0); return Number.isFinite(resultado) ? resultado : 0; }
 function redondear(valor: number) { return Number(valor.toFixed(2)); }
+function normalizarTexto(valor: string) {
+  return valor.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+}
 
-function datosFinancieros(linea: LineaIA, esAjusteNegativo: boolean) {
+function datosFinancieros(linea: LineaIA, esAjusteNegativo: boolean, descuentoForzado?: number) {
   if (esAjusteNegativo) {
     const precio = -Math.abs(numero(linea.precio_bruto_unitario ?? linea.precio_unitario));
     const cantidad = Math.max(1, numero(linea.cantidad ?? 1));
     const subtotal = linea.subtotal_neto != null ? -Math.abs(numero(linea.subtotal_neto)) : redondear(cantidad * precio);
-    // No confiamos en un IVA de línea que pueda haber sido leído desde otra columna.
-    // Para un ajuste negativo calculamos el IVA sobre su base neta y su alícuota.
     const tasaIVA = numero(linea.iva ?? 21);
     const ivaImporte = redondear(subtotal * (tasaIVA / 100));
     const impuestosInternos = linea.impuestos_internos != null ? -Math.abs(numero(linea.impuestos_internos)) : 0;
@@ -38,20 +39,43 @@ function datosFinancieros(linea: LineaIA, esAjusteNegativo: boolean) {
 
   const precioBrutoUnitario = linea.precio_bruto_unitario != null ? Math.abs(numero(linea.precio_bruto_unitario)) : Math.abs(numero(linea.precio_unitario ?? 0));
   const cantidad = Math.max(0, numero(linea.cantidad ?? 0));
-  const descuento = Math.abs(numero(linea.descuento ?? 0));
+  const descuento = descuentoForzado != null ? Math.max(0, descuentoForzado) : Math.abs(numero(linea.descuento ?? 0));
   const bonificacion = linea.bonificacion != null ? Math.abs(numero(linea.bonificacion)) : 0;
   const cantidadBonificada = Math.max(0, numero(linea.cantidad_bonificada ?? linea.cantidad_bonificada_detalle ?? 0));
   const bonificacionCantidad = linea.tipo_bonificacion === "cantidad" ? cantidadBonificada * precioBrutoUnitario : 0;
   const subtotalCalculado = Math.max(0, cantidad * precioBrutoUnitario - descuento - bonificacion - bonificacionCantidad);
-  const subtotalNeto = linea.subtotal_neto != null ? Math.abs(numero(linea.subtotal_neto)) : subtotalCalculado;
-  const precioNeto = linea.precio_neto != null ? Math.abs(numero(linea.precio_neto)) : cantidad > 0 ? subtotalNeto / cantidad : 0;
+  const subtotalNeto = descuentoForzado != null ? redondear(subtotalCalculado) : (linea.subtotal_neto != null ? Math.abs(numero(linea.subtotal_neto)) : subtotalCalculado);
+  const precioNeto = descuentoForzado != null ? (cantidad > 0 ? subtotalNeto / cantidad : 0) : (linea.precio_neto != null ? Math.abs(numero(linea.precio_neto)) : cantidad > 0 ? subtotalNeto / cantidad : 0);
   const iva = numero(linea.iva ?? 21);
-  const ivaImporte = linea.iva_importe != null ? Math.abs(numero(linea.iva_importe)) : subtotalNeto * (iva / 100);
+  const ivaImporte = descuentoForzado != null ? redondear(subtotalNeto * (iva / 100)) : (linea.iva_importe != null ? Math.abs(numero(linea.iva_importe)) : subtotalNeto * (iva / 100));
   return { bonificacion: bonificacion || undefined, cantidad_bonificada: cantidadBonificada || undefined, cantidad_bonificada_detalle: linea.cantidad_bonificada_detalle != null ? Math.max(0, numero(linea.cantidad_bonificada_detalle)) : undefined, tipo_bonificacion: normalizarTipoBonificacion(linea.tipo_bonificacion), precio_bruto_unitario: redondear(precioBrutoUnitario), precio_neto: redondear(precioNeto), subtotal_neto: redondear(subtotalNeto), iva_importe: redondear(ivaImporte), impuestos_internos: linea.impuestos_internos != null ? Math.abs(numero(linea.impuestos_internos)) : 0 };
+}
+
+function extraerDescripcionObjetivo(descuento: LineaIA) {
+  if (descuento.aplica_a_descripciones?.length) return descuento.aplica_a_descripciones.map(normalizarTexto).filter(Boolean);
+  const texto = normalizarTexto(descuento.descripcion);
+  const sinPorcentaje = texto.replace(/\b\d+(?:[.,]\d+)?\s*%?\b/g, " ");
+  return sinPorcentaje.replace(/\b(descuento|descuento de|off|dto|bonificacion|bonificaci[oó]n)\b/g, " ").replace(/\s+/g, " ").trim() ? [sinPorcentaje.replace(/\b(descuento|descuento de|off|dto|bonificacion|bonificaci[oó]n)\b/g, " ").replace(/\s+/g, " ").trim()] : [];
+}
+
+function coincideObjetivo(linea: LineaProcesada, objetivos: string[]) {
+  if (!objetivos.length) return false;
+  const descripcion = normalizarTexto(linea.descripcionLeida);
+  return objetivos.some((objetivo) => objetivo === descripcion || descripcion.includes(objetivo) || objetivo.includes(descripcion));
+}
+
+function obtenerDescuentoAgrupado(descuento: LineaIA, linea: LineaProcesada) {
+  const base = Math.max(0, numero(linea.cantidad) * Math.abs(numero(linea.precio_bruto_unitario ?? linea.precio_unitario)));
+  const porcentaje = descuento.porcentaje_descuento != null ? numero(descuento.porcentaje_descuento) : descuento.descuentos?.find((d) => d.porcentaje != null)?.porcentaje != null ? numero(descuento.descuentos.find((d) => d.porcentaje != null)?.porcentaje) : null;
+  if (porcentaje != null && porcentaje > 0) return redondear(base * porcentaje / 100);
+  const importe = descuento.descuento != null ? numero(descuento.descuento) : descuento.descuentos?.find((d) => d.importe != null)?.importe != null ? numero(descuento.descuentos.find((d) => d.importe != null)?.importe) : 0;
+  return redondear(Math.min(base, Math.abs(importe)));
 }
 
 export async function procesarLineasIA(supabase: SupabaseClient, proveedorId: string | null, lineasIA: LineaIA[], productos: ProductoSistema[]): Promise<LineaProcesada[]> {
   const resultado: LineaProcesada[] = [];
+  const descuentosAgrupados = lineasIA.filter((linea) => linea.tipo_linea === "descuento_linea" || linea.tipo_linea === "descuento_agrupado");
+
   for (const linea of lineasIA) {
     if (linea.tipo_linea === "descuento_linea" || linea.tipo_linea === "descuento_agrupado") continue;
     const esAjusteNegativo = linea.es_ajuste_negativo === true || linea.tipo_linea === "ajuste";
@@ -73,5 +97,26 @@ export async function procesarLineasIA(supabase: SupabaseClient, proveedorId: st
     if (match.confianza === "media" && match.producto) { resultado.push({ ...base, producto_id: "", autoMatcheado: false, score: match.score, confianza: "media", motivo: match.motivo, fuente: "smartmatch", producto_sugerido_id: match.producto.id, producto_sugerido_nombre: match.producto.nombre }); continue; }
     resultado.push({ ...base, producto_id: "", autoMatcheado: false, score: match.score, confianza: "baja", motivo: match.motivo, fuente: "smartmatch" });
   }
+
+  for (const descuento of descuentosAgrupados) {
+    const objetivos = extraerDescripcionObjetivo(descuento);
+    const candidatas = resultado.filter((linea) => linea.tipo_linea === "producto" && coincideObjetivo(linea, objetivos));
+    for (const linea of candidatas) {
+      const descuentoImporte = obtenerDescuentoAgrupado(descuento, linea);
+      if (descuentoImporte <= 0) continue;
+      const financieros = datosFinancieros({
+        ...linea,
+        descuento: descuentoImporte,
+        subtotal_neto: undefined,
+        precio_neto: undefined,
+        iva_importe: undefined,
+      }, false, descuentoImporte);
+      linea.descuento = redondear(numero(linea.descuento) + descuentoImporte);
+      linea.precio_final = financieros.precio_neto ?? linea.precio_final;
+      Object.assign(linea, financieros);
+      linea.motivo = `${linea.motivo} Descuento agrupado aplicado: ${descuento.descripcion}.`;
+    }
+  }
+
   return resultado;
 }
