@@ -69,23 +69,27 @@ export function RemitoForm({ proveedores, empresas, productos, formasPago }: Pro
     )
   }
 
+  const calcularLinea = (linea: LineaRemito) => {
+    const bruto = Math.max(0, Number(linea.cantidad ?? 0) * Number(linea.precio_unitario ?? 0))
+    const porcentaje = Math.min(100, Math.max(0, Number(linea.descuento ?? 0)))
+    const descuentoImporte = bruto * (porcentaje / 100)
+    const bonificacion = Math.max(0, Number(linea.bonificacion_importe ?? 0))
+    const neto = Math.max(0, bruto - descuentoImporte - bonificacion)
+    return { bruto, porcentaje, descuentoImporte, bonificacion, neto }
+  }
+
   const { subtotalBruto, descuentoTotal, bonificacionTotal, total } = useMemo(() => {
-    let subtotalBruto = 0
-    let descuentoTotal = 0
-    let bonificacionTotal = 0
-
-    lineas.forEach((linea) => {
-      subtotalBruto += linea.cantidad * linea.precio_unitario
-      descuentoTotal += Number(linea.descuento ?? 0)
-      bonificacionTotal += Number(linea.bonificacion_importe ?? 0)
-    })
-
-    return {
-      subtotalBruto,
-      descuentoTotal,
-      bonificacionTotal,
-      total: Math.max(0, subtotalBruto - descuentoTotal - bonificacionTotal),
-    }
+    return lineas.reduce(
+      (totales, linea) => {
+        const calculado = calcularLinea(linea)
+        totales.subtotalBruto += calculado.bruto
+        totales.descuentoTotal += calculado.descuentoImporte
+        totales.bonificacionTotal += calculado.bonificacion
+        totales.total += calculado.neto
+        return totales
+      },
+      { subtotalBruto: 0, descuentoTotal: 0, bonificacionTotal: 0, total: 0 }
+    )
   }, [lineas])
 
   const montoPagoMostrado = pagoTocado ? montoPago : total
@@ -149,17 +153,25 @@ export function RemitoForm({ proveedores, empresas, productos, formasPago }: Pro
         datos.lineas.map((l) => {
           const match = matchearProducto(l.descripcion, productos)
           const bruto = Number(l.cantidad || 1) * Number(l.precio_unitario || 0)
-          const descuento = Number(l.descuento ?? 0)
-          const precioNeto = Math.max(0, Number(l.precio_final ?? bruto - descuento))
-          const bonificacionImporte = Math.max(0, bruto - descuento - precioNeto)
+          const descuentoImporteIA = Math.max(0, Number(l.descuento ?? 0))
+          const porcentajeIA = l.porcentaje_descuento != null
+            ? Number(l.porcentaje_descuento)
+            : bruto > 0
+              ? (descuentoImporteIA / bruto) * 100
+              : 0
+          const precioNeto = Math.max(0, Number(l.precio_final ?? bruto - descuentoImporteIA))
+          const bonificacionImporte = Math.max(
+            0,
+            bruto - (bruto * Math.max(0, Math.min(100, porcentajeIA)) / 100) - precioNeto
+          )
 
           return {
             producto_id: match?.id ?? "",
             cantidad: l.cantidad || 1,
             precio_unitario: l.precio_unitario || 0,
-            descuento,
+            descuento: Math.max(0, Math.min(100, porcentajeIA)),
             bonificacion_importe: bonificacionImporte,
-            porcentaje_descuento: l.porcentaje_descuento ?? null,
+            porcentaje_descuento: porcentajeIA,
             bonificacion_tipo: l.grupo_descuento ?? null,
             cantidad_bonificada: null,
             descripcionLeida: l.descripcion,
@@ -204,12 +216,7 @@ export function RemitoForm({ proveedores, empresas, productos, formasPago }: Pro
       <input type="hidden" name="bonificacion_total" value={bonificacionTotal} />
       <input type="hidden" name="total" value={total} />
 
-      <CargaIA
-        inputArchivoRef={inputArchivoRef}
-        leyendoIA={leyendoIA}
-        errorIA={errorIA}
-        manejarArchivoIA={manejarArchivoIA}
-      />
+      <CargaIA inputArchivoRef={inputArchivoRef} leyendoIA={leyendoIA} errorIA={errorIA} manejarArchivoIA={manejarArchivoIA} />
 
       {fallbackIA && (
         <div className="rounded-xl border border-amber-300 bg-amber-50 p-5">
@@ -229,43 +236,13 @@ export function RemitoForm({ proveedores, empresas, productos, formasPago }: Pro
         </div>
       )}
 
-      <DatosComprobante
-        proveedores={proveedores}
-        empresas={empresas}
-        proveedorId={proveedorId}
-        setProveedorId={setProveedorId}
-        numero={numero}
-        setNumero={setNumero}
-        fecha={fecha}
-        setFecha={setFecha}
-        fechaVencimiento={fechaVencimiento}
-        setFechaVencimiento={setFechaVencimiento}
-      />
+      <DatosComprobante proveedores={proveedores} empresas={empresas} proveedorId={proveedorId} setProveedorId={setProveedorId} numero={numero} setNumero={setNumero} fecha={fecha} setFecha={setFecha} fechaVencimiento={fechaVencimiento} setFechaVencimiento={setFechaVencimiento} />
 
-      <ProductosRemito
-        productos={productos}
-        lineas={lineas}
-        agregarLinea={agregarLinea}
-        quitarLinea={quitarLinea}
-        actualizarLinea={actualizarLinea}
-        actualizarProductoDeLinea={actualizarProductoDeLinea}
-      />
+      <ProductosRemito productos={productos} lineas={lineas} agregarLinea={agregarLinea} quitarLinea={quitarLinea} actualizarLinea={actualizarLinea} actualizarProductoDeLinea={actualizarProductoDeLinea} />
 
-      <PagoRemito
-        pagarAlCargar={pagarAlCargar}
-        setPagarAlCargar={setPagarAlCargar}
-        montoPagoMostrado={montoPagoMostrado}
-        setMontoPago={setMontoPago}
-        setPagoTocado={setPagoTocado}
-        total={total}
-        formasPago={formasPago}
-      />
+      <PagoRemito pagarAlCargar={pagarAlCargar} setPagarAlCargar={setPagarAlCargar} montoPagoMostrado={montoPagoMostrado} setMontoPago={setMontoPago} setPagoTocado={setPagoTocado} total={total} formasPago={formasPago} />
 
-      <button
-        type="submit"
-        disabled={lineas.length === 0}
-        className="rounded-lg bg-black px-5 py-2 text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
-      >
+      <button type="submit" disabled={lineas.length === 0} className="rounded-lg bg-black px-5 py-2 text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">
         Guardar remito
       </button>
     </form>
