@@ -26,6 +26,50 @@ function normalizarTexto(valor: string) {
   return valor.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
 }
 
+/**
+ * Normaliza marcas/abreviaturas y presentaciones que suelen cambiar entre
+ * la descripción del descuento y la descripción real del producto.
+ * Ej.: PWD / POW / POWER / POWERADE -> POWERADE
+ *      500X6 / 500 ML -> 500
+ *      1.5L / 1.500 -> 1500
+ */
+function normalizarConceptoDescuento(valor: string) {
+  let texto = normalizarTexto(valor)
+    .replace(/\bpow(?:erade)?\b/g, "powerade")
+    .replace(/\bpwd\b/g, "powerade")
+    .replace(/\bpower\b/g, "powerade")
+    .replace(/\b1\s*[.,]?\s*5\s*l\b/g, "1500")
+    .replace(/\b1\s*[.,]\s*500\b/g, "1500")
+    .replace(/\b1500\s*ml\b/g, "1500")
+    .replace(/\b500\s*ml\b/g, "500")
+    .replace(/\b(\d+)\s*x\s*(\d+)\b/g, "$1 $2")
+    .replace(/\b(caj|caja|cajas|unidad|unid|u)\b/g, " ")
+    .replace(/\bpdv\b/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return texto;
+}
+
+function tokens(valor: string) {
+  return normalizarConceptoDescuento(valor).split(" ").filter((token) => token.length >= 2);
+}
+
+function coincideConceptoDescuento(descripcionProducto: string, objetivo: string) {
+  const producto = normalizarConceptoDescuento(descripcionProducto);
+  const objetivoNormalizado = normalizarConceptoDescuento(objetivo);
+  if (!producto || !objetivoNormalizado) return false;
+  if (producto.includes(objetivoNormalizado) || objetivoNormalizado.includes(producto)) return true;
+
+  const objetivoTokens = tokens(objetivoNormalizado);
+  const productoTokens = new Set(tokens(producto));
+  if (!objetivoTokens.length) return false;
+
+  // Para descuentos agrupados usamos los tokens significativos como mínimo:
+  // "30 Power 500" debe encontrar "PWD ... 500X6" y "PWD ... 500 ML".
+  const coincidencias = objetivoTokens.filter((token) => productoTokens.has(token));
+  return coincidencias.length === objetivoTokens.length;
+}
+
 function datosFinancieros(linea: LineaIA, esAjusteNegativo: boolean, descuentoForzado?: number) {
   if (esAjusteNegativo) {
     const precio = -Math.abs(numero(linea.precio_bruto_unitario ?? linea.precio_unitario));
@@ -52,17 +96,16 @@ function datosFinancieros(linea: LineaIA, esAjusteNegativo: boolean, descuentoFo
 }
 
 function extraerDescripcionObjetivo(descuento: LineaIA) {
-  if (descuento.aplica_a_descripciones?.length) return descuento.aplica_a_descripciones.map(normalizarTexto).filter(Boolean);
+  if (descuento.aplica_a_descripciones?.length) return descuento.aplica_a_descripciones.map(normalizarConceptoDescuento).filter(Boolean);
   const texto = normalizarTexto(descuento.descripcion);
   const sinPorcentaje = texto.replace(/\b\d+(?:[.,]\d+)?\s*%?\b/g, " ");
-  const objetivo = sinPorcentaje.replace(/\b(descuento|descuento de|off|dto|bonificacion|bonificaci[oó]n)\b/g, " ").replace(/\s+/g, " ").trim();
-  return objetivo ? [objetivo] : [];
+  const objetivo = sinPorcentaje.replace(/\b(descuento|descuento de|off|dto|bonificacion|bonificacion)\b/g, " ").replace(/\s+/g, " ").trim();
+  return objetivo ? [normalizarConceptoDescuento(objetivo)] : [];
 }
 
 function coincideObjetivo(linea: LineaProcesada, objetivos: string[]) {
   if (!objetivos.length) return false;
-  const descripcion = normalizarTexto(linea.descripcionLeida);
-  return objetivos.some((objetivo) => objetivo === descripcion || descripcion.includes(objetivo) || objetivo.includes(descripcion));
+  return objetivos.some((objetivo) => coincideConceptoDescuento(linea.descripcionLeida, objetivo));
 }
 
 function obtenerDescuentoAgrupado(descuento: LineaIA, linea: LineaProcesada) {
