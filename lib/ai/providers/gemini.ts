@@ -20,6 +20,19 @@ async function withRetry<T>(fn: () => Promise<T>, retries = 3, delayMs = 2000): 
   throw lastError instanceof Error ? lastError : new Error("Gemini no respondió tras varios intentos")
 }
 
+const DICCIONARIO_IMPUESTOS_INTERNOS = `
+ENCABEZADOS EQUIVALENTES A IMPUESTOS INTERNOS:
+I.I | I.I. | I INTERNOS | I. INTERNOS | I INTERNO | I. INTERNO |
+IMP I | IMP.I | IMP INT | IMP. INT | IMP INTERNO | IMP. INTERNO |
+IMP INTERNOS | IMP. INTERNOS | CARGOS INT | CARGOS INTERNOS.
+
+Todos estos encabezados significan exactamente la columna impuestos_internos.
+Si existe una columna con cualquiera de estas variantes, hay que leer el importe alineado en esa columna para CADA FILA.
+No confundirla con IVA, IVA $, descuento, precio neto ni total.
+La posición visual de la columna debe conservarse aunque el OCR haya separado o abreviado el encabezado.
+Si la columna existe pero una fila está vacía, devolver 0 para esa fila.
+`
+
 export async function extraerConGemini(base64: string, mimeType: string, tipo: TipoComprobanteIA): Promise<ComprobanteExtraido> {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) throw new Error("Falta la variable de entorno GEMINI_API_KEY")
@@ -37,118 +50,75 @@ Analizá TODO el documento antes de responder.
 Devolvé únicamente un JSON válido siguiendo exactamente el schema recibido.
 
 ==================================================
+DICCIONARIO DE COLUMNAS — OBLIGATORIO
+==================================================
+${DICCIONARIO_IMPUESTOS_INTERNOS}
+
+IMPORTANTE: no leas la factura solamente como texto lineal. Es una tabla.
+Reconstruí la relación visual entre encabezado, columna y fila.
+Si el encabezado dice "I. INTERNOS", el número alineado debajo de ese encabezado pertenece a `impuestos_internos`.
+Esto debe hacerse aunque el OCR escriba el encabezado como I.I, IMP INT, IMP. INTERNOS, etc.
+
+==================================================
 DATOS GENERALES Y TOTALES OFICIALES
 ==================================================
 
-Identificá proveedor, número, fechas y los importes que figuran en el PIE/RESUMEN del comprobante:
+Identificá proveedor, número, fechas y los importes del PIE/RESUMEN:
 - subtotal bruto
 - descuento total
 - subtotal neto
 - IVA total
 - impuestos internos total
-- percepciones (IVA, IIBB, etc.)
+- percepciones
 - otros cargos
 - total final
 
-Los importes del PIE/RESUMEN son la fuente de verdad para los totales del comprobante.
-No los reconstruyas a partir de las líneas si el pie los muestra claramente.
+Los importes del PIE/RESUMEN son la fuente de verdad.
+Si el pie muestra impuestos internos, cargalos en `impuestos_internos_total`.
+Si muestra percepciones u otros cargos que forman parte del total, cargalos en `cargos`.
 
-IMPORTANTE: todo importe del pie que NO forme parte del subtotal neto ni del IVA total debe conservarse.
-Los impuestos internos deben ir en impuestos_internos_total.
-Las percepciones y otros cargos deben ir también dentro de cargos, con su descripción exacta e importe,
-para que la aplicación pueda sumarlos al total. No omitas percepciones por considerarlas meramente
-informativas: si tienen importe y forman parte del total, son cargos contables del comprobante.
+Si existe una columna de impuestos internos, extraé TAMBIÉN el importe de cada fila en `impuestos_internos`.
+El total de impuestos internos debe ser consistente con la suma de esas líneas, salvo redondeos.
 
-Ejemplo: si el pie muestra "Imp. Internos $10.297,26", "Perc. IVA $11.044,55" y "Perc. IIBB BsAs $15.137,96",
-cargos debe contener esos conceptos con esos importes, y el total debe reflejar los tres.
-
-No inventes información. Si un dato no aparece o no puede determinarse con seguridad, devolvé null.
-Las fechas deben estar en formato YYYY-MM-DD. Todos los importes deben ser números.
+No inventes información. Si una columna de impuestos internos no existe en el documento, usá 0 en las líneas y null para el total si tampoco aparece en el pie.
+Todos los importes deben ser números.
 
 ==================================================
-INTERPRETACIÓN DE SIGNOS — MUY IMPORTANTE
+INTERPRETACIÓN DE SIGNOS
 ==================================================
 
 NO interpretes un guion "-" como signo negativo solamente porque aparece cerca de un número.
-En documentos argentinos el guion también puede ser un SEPARADOR VISUAL entre columnas, campos o conceptos.
-Un importe es negativo solamente cuando el documento muestra evidencia clara de que ese importe representa
-una reducción/ajuste.
-
-Ejemplo: "38.380,17 - 7.000,00" NO significa que 38.380,17 sea negativo.
-Ejemplo: una línea de ajuste que muestra "-38.380,17" en la columna de precio/subtotal SÍ es negativa.
-
+Un importe es negativo solamente cuando el documento muestra evidencia clara de que representa una reducción/ajuste.
 Nunca conviertas un importe negativo en positivo por tu cuenta.
-Conservá el signo que realmente tenga el comprobante.
 
-Para cada línea indicá:
-- tipo_linea: producto, descuento_linea, descuento_agrupado o ajuste;
-- es_ajuste_negativo: true solamente cuando el documento confirme que la línea es un ajuste negativo.
+Para cada línea indicá tipo_linea: producto, descuento_linea, descuento_agrupado o ajuste.
+`es_ajuste_negativo` es true solamente cuando el documento confirme que la línea es un ajuste negativo.
 
 ==================================================
-PRODUCTOS Y AJUSTES
+PRODUCTOS, DESCUENTOS, IVA E IMPUESTOS
 ==================================================
 
 Para cada línea identificá:
-- descripcion
-- codigo_proveedor
-- cantidad
-- cantidad_bonificada
-- precio_unitario
-- precio_bruto_unitario
-- descuento
-- porcentaje_descuento
-- descuentos
-- grupo_descuento
-- bonificacion
-- tipo_bonificacion
-- cantidad_bonificada_detalle
-- precio_neto
-- precio_neto_unitario
-- precio_final
-- subtotal_neto
-- iva
-- iva_importe
-- impuestos_internos
+descripcion, codigo_proveedor, cantidad, cantidad_bonificada, precio_unitario,
+precio_bruto_unitario, descuento, porcentaje_descuento, descuentos, grupo_descuento,
+bonificacion, tipo_bonificacion, cantidad_bonificada_detalle, precio_neto,
+precio_neto_unitario, precio_final, subtotal_neto, iva, iva_importe, impuestos_internos.
 
-"precio_unitario" representa el importe unitario que aparece en la columna de precio de esa línea.
-No lo transformes a absoluto.
+`iva` es la alícuota en porcentaje.
+`iva_importe` es el importe de IVA de la línea.
+`impuestos_internos` es exclusivamente el importe de la columna de impuestos internos.
 
-Para una línea negativa confirmada:
-- conservá precio_unitario negativo;
-- conservá subtotal_neto negativo cuando corresponda;
-- conservá iva_importe negativo cuando corresponda;
-- es_ajuste_negativo = true.
-
-Para una línea normal:
-- precio_unitario positivo salvo que el documento indique expresamente lo contrario;
-- subtotal_neto = cantidad × precio_unitario menos descuentos/bonificaciones aplicables;
-- IVA calculado/aplicado sobre la base neta correspondiente.
+Para una línea negativa confirmada, conservá los signos negativos de precio/subtotal/IVA cuando correspondan.
+Para una línea normal, precio_unitario debe ser positivo salvo indicación expresa del documento.
 
 ==================================================
-IVA
+VALIDACIÓN
 ==================================================
 
-"iva" es la ALICUOTA en porcentaje: 21, 10.5, 27, 0, etc.
-"iva_importe" es el IMPORTE de IVA de la línea y conserva su signo.
-
-Para ajustes negativos, si el documento no muestra claramente un importe de IVA de línea confiable,
-la aplicación calculará el IVA negativo a partir del subtotal neto y la alícuota.
-
-==================================================
-VALIDACIÓN ANTES DE RESPONDER
-==================================================
-
-Primero identificá los TOTALES DEL PIE.
-Después revisá las líneas y sus signos.
-Finalmente comprobá, cuando el documento lo permita, que:
-
+Comprobá cuando sea posible:
 subtotal neto + IVA + impuestos internos + cargos = total final
 
-respetando signos y redondeo.
-
-Si las líneas NO permiten reconstruir exactamente el total del pie, NO fuerces las líneas para que coincidan.
-Conservá los importes oficiales del pie y devolvé los valores de línea que realmente se puedan leer.
-La aplicación validará la diferencia y pedirá revisión en lugar de guardar un total incorrecto.
+No fuerces las líneas para hacer coincidir el total. Conservá los importes oficiales del pie.
 `
 
   const contenido = mimeType === "application/pdf"
