@@ -43,7 +43,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-gray-100">
-      <div className="flex min-h-screen">
+      <div className="flex min-h-screen flex-col md:flex-row">
         <DashboardNav
           empresas={empresas}
           empresaActivaId={empresaActivaId}
@@ -53,7 +53,7 @@ export default async function DashboardLayout({ children }: { children: React.Re
           logout={logout}
         />
 
-        <section className="min-w-0 flex-1 p-4 md:p-8">{children}</section>
+        <section className="min-w-0 w-full flex-1 p-4 md:p-8">{children}</section>
       </div>
     </div>
   );
