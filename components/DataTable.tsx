@@ -17,16 +17,16 @@ export function DataTable<T extends { id: string }>({
   onEdit?: (row: T) => string
 }) {
   return (
-    <div className="overflow-hidden rounded-xl bg-white shadow">
-      <table className="w-full">
+    <div className="overflow-x-auto rounded-xl bg-white shadow">
+      <table className="min-w-full w-max">
         <thead className="bg-gray-100">
           <tr>
             {columns.map((col) => (
-              <th key={col.key} className={`p-3 text-${col.align ?? "left"}`}>
+              <th key={col.key} className={`whitespace-nowrap p-3 text-${col.align ?? "left"}`}>
                 {col.label}
               </th>
             ))}
-            {(onView || onEdit) && <th className="p-3 text-center">Acciones</th>}
+            {(onView || onEdit) && <th className="whitespace-nowrap p-3 text-center">Acciones</th>}
           </tr>
         </thead>
         <tbody>
