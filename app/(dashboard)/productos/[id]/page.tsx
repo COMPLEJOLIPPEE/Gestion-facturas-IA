@@ -5,6 +5,15 @@ import { createClient } from "@/lib/supabase/server";
 
 type Props = { params: Promise<{ id: string }> };
 
+type HistorialItem = {
+  id: string;
+  fecha: string | null;
+  tipo: "Factura" | "Remito";
+  numero: string;
+  proveedor: string;
+  precio: number;
+};
+
 const money = (value: number | null | undefined) =>
   `$${Number(value ?? 0).toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 
@@ -22,33 +31,66 @@ export default async function ProductoDetalle({ params }: Props) {
     return <PageContainer><div className="rounded-xl bg-red-50 p-4 text-red-700">Producto no encontrado.</div></PageContainer>;
   }
 
-  const { data: compras } = await supabase
-    .from("factura_items")
-    .select(`
-      id,
-      cantidad,
-      precio_neto_unitario,
-      precio_unitario,
-      factura_id,
-      facturas (fecha, numero, proveedores (nombre_fantasia, razon_social))
-    `)
-    .eq("producto_id", id)
-    .order("factura_id", { ascending: false });
+  const [{ data: comprasFacturas }, { data: comprasRemitos }] = await Promise.all([
+    supabase
+      .from("factura_items")
+      .select(`
+        id,
+        cantidad,
+        precio_neto_unitario,
+        precio_unitario,
+        factura_id,
+        facturas (fecha, numero, proveedores (nombre_fantasia, razon_social))
+      `)
+      .eq("producto_id", id)
+      .limit(10),
+    supabase
+      .from("remito_items")
+      .select(`
+        id,
+        cantidad,
+        precio_neto_unitario,
+        precio_unitario,
+        remito_id,
+        remitos (fecha, numero, proveedores (nombre_fantasia, razon_social))
+      `)
+      .eq("producto_id", id)
+      .limit(10),
+  ]);
 
-  const historial = (compras ?? [])
+  const historialFacturas: HistorialItem[] = (comprasFacturas ?? [])
     .filter((item) => item.precio_neto_unitario != null || item.precio_unitario != null)
     .map((item) => {
       const factura = Array.isArray(item.facturas) ? item.facturas[0] : item.facturas;
       const proveedor = factura && (Array.isArray(factura.proveedores) ? factura.proveedores[0] : factura.proveedores);
       return {
-        id: item.id,
+        id: `factura-${item.id}`,
         fecha: factura?.fecha ?? null,
+        tipo: "Factura",
         numero: factura?.numero ?? "—",
         proveedor: proveedor?.nombre_fantasia || proveedor?.razon_social || "—",
         precio: Number(item.precio_neto_unitario ?? item.precio_unitario ?? 0),
       };
-    })
-    .sort((a, b) => String(b.fecha ?? "").localeCompare(String(a.fecha ?? "")));
+    });
+
+  const historialRemitos: HistorialItem[] = (comprasRemitos ?? [])
+    .filter((item) => item.precio_neto_unitario != null || item.precio_unitario != null)
+    .map((item) => {
+      const remito = Array.isArray(item.remitos) ? item.remitos[0] : item.remitos;
+      const proveedor = remito && (Array.isArray(remito.proveedores) ? remito.proveedores[0] : remito.proveedores);
+      return {
+        id: `remito-${item.id}`,
+        fecha: remito?.fecha ?? null,
+        tipo: "Remito",
+        numero: remito?.numero ?? "—",
+        proveedor: proveedor?.nombre_fantasia || proveedor?.razon_social || "—",
+        precio: Number(item.precio_neto_unitario ?? item.precio_unitario ?? 0),
+      };
+    });
+
+  const historial = [...historialFacturas, ...historialRemitos]
+    .sort((a, b) => String(b.fecha ?? "").localeCompare(String(a.fecha ?? "")))
+    .slice(0, 10);
 
   const historialConVariacion = historial.map((item, index) => {
     const anterior = historial[index + 1]?.precio;
@@ -75,7 +117,7 @@ export default async function ProductoDetalle({ params }: Props) {
       <section className="mt-6 rounded-xl bg-white p-6 shadow">
         <div className="mb-4">
           <h2 className="text-xl font-semibold">Historial de compras y costos</h2>
-          <p className="mt-1 text-sm text-gray-500">Se alimenta automáticamente con las facturas donde aparece este producto.</p>
+          <p className="mt-1 text-sm text-gray-500">Muestra las últimas 10 compras registradas en facturas y remitos.</p>
         </div>
 
         {ultimaCompra && (
@@ -92,12 +134,13 @@ export default async function ProductoDetalle({ params }: Props) {
           <div className="rounded-lg border border-dashed p-6 text-center text-sm text-gray-500">Todavía no hay compras registradas para este producto.</div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[720px] text-sm">
-              <thead className="border-b bg-gray-50"><tr><th className="p-3 text-left">Fecha</th><th className="p-3 text-left">Factura</th><th className="p-3 text-left">Proveedor</th><th className="p-3 text-right">Precio</th><th className="p-3 text-right">Anterior</th><th className="p-3 text-right">Variación</th></tr></thead>
+            <table className="w-full min-w-[820px] text-sm">
+              <thead className="border-b bg-gray-50"><tr><th className="p-3 text-left">Fecha</th><th className="p-3 text-left">Tipo</th><th className="p-3 text-left">Comprobante</th><th className="p-3 text-left">Proveedor</th><th className="p-3 text-right">Precio</th><th className="p-3 text-right">Anterior</th><th className="p-3 text-right">Variación</th></tr></thead>
               <tbody>
                 {historialConVariacion.map((item) => (
                   <tr key={item.id} className="border-b last:border-0">
                     <td className="p-3">{item.fecha ? new Date(`${item.fecha}T12:00:00`).toLocaleDateString("es-AR") : "—"}</td>
+                    <td className="p-3"><span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-medium ${item.tipo === "Factura" ? "bg-blue-100 text-blue-700" : "bg-violet-100 text-violet-700"}`}>{item.tipo}</span></td>
                     <td className="p-3">{item.numero}</td>
                     <td className="p-3">{item.proveedor}</td>
                     <td className="p-3 text-right font-medium">{money(item.precio)}</td>
