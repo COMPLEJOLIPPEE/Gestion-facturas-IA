@@ -118,8 +118,11 @@ export default function UsuariosAdmin() {
     if (!confirm(`¿Enviar un correo de restablecimiento a ${user.email}?`)) return;
     setError(""); setMessage("");
     try {
-      const data = await call("reset", { email: user.email });
-      setMessage(data.message ?? "Correo enviado");
+      const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
+        redirectTo: "https://gestion-facturas-ia.vercel.app/restablecer-password",
+      });
+      if (error) throw new Error(error.message);
+      setMessage(`Correo de restablecimiento enviado a ${user.email}`);
     } catch (e) { setError(e instanceof Error ? e.message : "No se pudo enviar el reset"); }
   }
 
