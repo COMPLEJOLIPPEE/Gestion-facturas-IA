@@ -4,22 +4,20 @@ import { PagoForm } from "./PagoForm"
 export default async function NuevoPagoPage() {
   const supabase = await createClient()
 
-  const [{ data: facturasPendientes }, { data: remitosPendientes }, { data: formasPago }] = await Promise.all([
+  const [{ data: facturas }, { data: remitos }, { data: formasPago }] = await Promise.all([
     supabase
       .from("facturas")
       .select("id, numero, total, proveedores (nombre_fantasia)")
-      .neq("estado", "pagado")
       .order("fecha", { ascending: false }),
     supabase
       .from("remitos")
-      .select("id, numero, monto_total, proveedores (nombre_fantasia)")
-      .neq("estado", "pagado")
+      .select("id, codigo_interno, numero, monto_total, proveedores (nombre_fantasia)")
       .order("fecha", { ascending: false }),
     supabase.from("formas_pago").select("id, nombre").order("nombre"),
   ])
 
-  const facturaIds = (facturasPendientes ?? []).map((f) => f.id)
-  const remitoIds = (remitosPendientes ?? []).map((r) => r.id)
+  const facturaIds = (facturas ?? []).map((f) => f.id)
+  const remitoIds = (remitos ?? []).map((r) => r.id)
 
   const [{ data: pagosDeFacturas }, { data: pagosDeRemitos }] = await Promise.all([
     facturaIds.length > 0
@@ -42,36 +40,41 @@ export default async function NuevoPagoPage() {
     pagadoPorRemito.set(p.remito_id, (pagadoPorRemito.get(p.remito_id) ?? 0) + Number(p.monto ?? 0))
   }
 
-  const facturas = (facturasPendientes ?? []).map((f) => {
-    const proveedor = Array.isArray(f.proveedores) ? f.proveedores[0] : f.proveedores
-    const total = Number(f.total ?? 0)
-    const pagado = pagadoPorFactura.get(f.id) ?? 0
-    return {
-      id: f.id,
-      numero: f.numero,
-      proveedor: proveedor?.nombre_fantasia ?? "—",
-      total,
-      saldo: Math.max(total - pagado, 0),
-    }
-  })
+  const facturasConSaldo = (facturas ?? [])
+    .map((f) => {
+      const proveedor = Array.isArray(f.proveedores) ? f.proveedores[0] : f.proveedores
+      const total = Number(f.total ?? 0)
+      const pagado = pagadoPorFactura.get(f.id) ?? 0
+      return {
+        id: f.id,
+        numero: f.numero,
+        proveedor: proveedor?.nombre_fantasia ?? "—",
+        total,
+        saldo: Math.max(total - pagado, 0),
+      }
+    })
+    .filter((f) => f.saldo > 0.01)
 
-  const remitos = (remitosPendientes ?? []).map((r) => {
-    const proveedor = Array.isArray(r.proveedores) ? r.proveedores[0] : r.proveedores
-    const total = Number(r.monto_total ?? 0)
-    const pagado = pagadoPorRemito.get(r.id) ?? 0
-    return {
-      id: r.id,
-      numero: r.numero,
-      proveedor: proveedor?.nombre_fantasia ?? "—",
-      total,
-      saldo: Math.max(total - pagado, 0),
-    }
-  })
+  const remitosConSaldo = (remitos ?? [])
+    .map((r) => {
+      const proveedor = Array.isArray(r.proveedores) ? r.proveedores[0] : r.proveedores
+      const total = Number(r.monto_total ?? 0)
+      const pagado = pagadoPorRemito.get(r.id) ?? 0
+      return {
+        id: r.id,
+        numero: r.numero,
+        codigo_interno: Number(r.codigo_interno ?? 0),
+        proveedor: proveedor?.nombre_fantasia ?? "—",
+        total,
+        saldo: Math.max(total - pagado, 0),
+      }
+    })
+    .filter((r) => r.saldo > 0.01)
 
   return (
     <div>
       <h1 className="mb-6 text-3xl font-bold">💰 Registrar pago</h1>
-      <PagoForm facturas={facturas} remitos={remitos} formasPago={formasPago ?? []} />
+      <PagoForm facturas={facturasConSaldo} remitos={remitosConSaldo} formasPago={formasPago ?? []} />
     </div>
   )
 }
