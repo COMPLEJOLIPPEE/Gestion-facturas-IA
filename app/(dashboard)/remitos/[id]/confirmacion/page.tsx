@@ -40,21 +40,31 @@ export default async function RemitoConfirmacionPage({ params }: Props) {
           Te va a servir para encontrarlo rápidamente después.
         </p>
 
-        <div className="my-7 rounded-xl bg-black px-6 py-5 text-white">
-          <p className="text-xs font-medium uppercase tracking-[0.25em] text-gray-300">
-            Código interno
+        <div className="my-7 rounded-xl border-2 border-amber-300 bg-amber-50 px-6 py-6 text-amber-950 shadow-sm">
+          <p className="text-sm font-bold uppercase tracking-[0.2em] text-amber-700">
+            Escribí este código en el comprobante físico
           </p>
-          <p className="mt-2 text-5xl font-black tracking-wider">{codigo}</p>
-          {remito.numero && (
-            <p className="mt-3 text-sm text-gray-300">
-              Remito proveedor: <span className="font-semibold text-white">{remito.numero}</span>
-            </p>
-          )}
+          <p className="mt-3 text-6xl font-black tracking-wider">{codigo}</p>
         </div>
 
-        <p className="mb-5 text-sm font-medium text-gray-700">
-          ✍️ Escribí <span className="font-bold">{codigo}</span> en el comprobante físico.
-        </p>
+        <div className="mb-6 rounded-xl border border-gray-200 bg-gray-50 px-5 py-4 text-left">
+          <div className="flex items-center justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                Código interno del remito
+              </p>
+              <p className="mt-1 text-xl font-bold text-gray-900">{codigo}</p>
+            </div>
+            {remito.numero && (
+              <div className="text-right">
+                <p className="text-xs font-semibold uppercase tracking-wider text-gray-500">
+                  Remito proveedor
+                </p>
+                <p className="mt-1 text-base font-semibold text-gray-800">{remito.numero}</p>
+              </div>
+            )}
+          </div>
+        </div>
 
         <Link
           href={`/remitos/${remito.id}`}
