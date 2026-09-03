@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
+  --background: #f3f4f6;
   --foreground: #000000;
   --text-muted: #475569;
   --text-muted-strong: #334155;
@@ -16,18 +16,14 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #000000;
-    --text-muted: #cbd5e1;
-    --text-muted-strong: #94a3b8;
-    --text-muted-soft: #cbd5e1;
-    --text-muted-xsoft: #e2e8f0;
-  }
+/* La aplicación usa una interfaz clara y consistente también en celulares. */
+html,
+body {
+  min-height: 100%;
 }
 
 body {
+  margin: 0;
   background: var(--background);
   color: var(--foreground) !important;
   font-family: Arial, Helvetica, sans-serif;
