@@ -36,6 +36,12 @@ export default async function DashboardLayout({ children }: { children: React.Re
   const rolActual =
     accesos?.find((acceso) => acceso.empresa_id === empresaActivaId)?.rol ?? "consulta";
 
+  const nombreUsuario =
+    String(user?.user_metadata?.nombre ?? user?.user_metadata?.name ?? "").trim() ||
+    String(user?.user_metadata?.apellido ?? "").trim() ||
+    user?.email?.split("@")[0] ||
+    "Usuario";
+
   return (
     <div className="flex min-h-screen bg-gray-100">
       <aside className="w-64 bg-white p-6 shadow">
@@ -44,8 +50,9 @@ export default async function DashboardLayout({ children }: { children: React.Re
         <EmpresaSelector empresas={empresas} empresaActivaId={empresaActivaId} />
 
         <div className="mb-6 rounded-lg bg-gray-50 p-3 text-sm">
-          <div className="font-medium">Perfil</div>
-          <div className="capitalize text-gray-600">{rolActual}</div>
+          <div className="font-medium">{nombreUsuario}</div>
+          <div className="text-xs text-gray-500">{user?.email}</div>
+          <div className="mt-1 capitalize text-gray-600">{rolActual}</div>
         </div>
 
         <nav className="flex flex-col gap-3">
