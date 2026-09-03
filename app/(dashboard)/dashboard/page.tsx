@@ -63,7 +63,7 @@ export default async function DashboardPage() {
   const movimientos: Movimiento[] = [
     ...(ultimasFacturas.data ?? []).map(f => ({ id:f.id, tipo:"Factura" as const, numero:f.numero, fecha:f.fecha, proveedor:(Array.isArray(f.proveedores)?f.proveedores[0]:f.proveedores)?.nombre_fantasia ?? "—", monto:Number(f.total??0), href:`/facturas/${f.id}` })),
     ...(ultimosRemitos.data ?? []).map(r => ({ id:r.id, tipo:"Remito" as const, numero:r.numero, fecha:r.fecha, proveedor:(Array.isArray(r.proveedores)?r.proveedores[0]:r.proveedores)?.nombre_fantasia ?? "—", monto:Number(r.monto_total??0), href:`/remitos/${r.id}` })),
-  ].sort((a,b)=>a.fecha<b.fecha?1:-1).slice(0,6)
+  ].sort((a,b)=>a.fecha<b.fecha?1:-1).slice(0,15)
   const columns: Column<Movimiento>[] = [
     { key:"tipo", label:"Tipo", render:m=>m.tipo==="Factura"?"📄 Factura":"📝 Remito" }, { key:"numero", label:"Número", render:m=>m.numero??"—" }, { key:"proveedor", label:"Proveedor" }, { key:"fecha", label:"Fecha", render:m=>formatDateAR(m.fecha) }, { key:"monto", label:"Monto", align:"right", render:m=>formatMoney(m.monto) },
   ]
