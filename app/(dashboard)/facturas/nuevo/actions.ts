@@ -58,9 +58,6 @@ export async function crearFactura(formData: FormData) {
   let cargos: CargoInput[] = []
   try { cargos = JSON.parse(String(formData.get("cargos") ?? "[]")) } catch { throw new Error("Los cargos de la factura no tienen un formato válido.") }
 
-  // Los impuestos internos y las percepciones del pie llegan como cargos de IA.
-  // Separamos los internos para guardarlos en su columna específica y dejamos
-  // percepciones/otros conceptos en otros_cargos.
   const cargosInternos = cargos.filter((cargo) => /impuestos?\s+internos?/i.test(cargo.descripcion))
   const otrosCargos = cargos.filter((cargo) => !/impuestos?\s+internos?/i.test(cargo.descripcion))
   const totalImpuestosInternosCargo = cargosInternos.reduce((acc, cargo) => acc + numero(cargo.importe), 0)
@@ -78,7 +75,6 @@ export async function crearFactura(formData: FormData) {
     const porCantidad = item.tipo_bonificacion === "cantidad"
     const bonificacionImporte = porCantidad ? cantidadBonificada * Math.abs(precioUnitario) : bonificacion
     const subtotalNeto = esAjusteNegativo ? -Math.abs(numero(item.subtotal_neto ?? bruto)) : Math.max(0, bruto - descuento - bonificacionImporte)
-    // El IVA de los ajustes ya viene calculado sobre la base neta por el procesador.
     const ivaImporte = numero(item.iva_importe) !== 0 ? numero(item.iva_importe) : subtotalNeto * (numero(item.iva) / 100)
     acc.subtotalBruto += bruto
     acc.descuentos += esAjusteNegativo ? Math.abs(subtotalNeto) : descuento + bonificacionImporte
@@ -104,9 +100,6 @@ export async function crearFactura(formData: FormData) {
   if (oficialIva !== null && !coincide(ivaCalculado, oficialIva)) throw new Error(`La factura no coincide con el IVA oficial del comprobante. Calculado: $${ivaCalculado.toFixed(2)} / Oficial: $${oficialIva.toFixed(2)}.`)
   if (oficialTotal !== null && !coincide(totalCalculado, oficialTotal)) throw new Error(`La factura no coincide con el total oficial del comprobante. Calculado: $${totalCalculado.toFixed(2)} / Oficial: $${oficialTotal.toFixed(2)}.`)
 
-  // Cuando la diferencia está dentro del margen de redondeo, usamos el importe
-  // oficial del pie para la cabecera de la factura. Las líneas conservan sus
-  // importes reales y la diferencia queda explicada por redondeos de presentación.
   const subtotal = oficialSubtotal !== null && coincide(subtotalCalculado, oficialSubtotal) ? redondear(oficialSubtotal) : subtotalCalculado
   const iva = oficialIva !== null && coincide(ivaCalculado, oficialIva) ? redondear(oficialIva) : ivaCalculado
   const total = oficialTotal !== null && coincide(totalCalculado, oficialTotal) ? redondear(oficialTotal) : totalCalculado
@@ -147,7 +140,10 @@ export async function crearFactura(formData: FormData) {
   }
 
   if (formData.get("pagar_al_cargar") === "1") {
-    await registrarPago(supabase, { tipo: "factura", comprobanteId: factura.id, monto: Number(formData.get("pago_monto")), formaPagoId: (formData.get("pago_forma_pago_id") as string) || null, fecha: formData.get("pago_fecha") as string })
+    // El importe del pago automático debe ser exactamente el total que se guardó
+    // en la factura. Esto evita diferencias de centavos entre el cálculo de líneas
+    // y el total oficial del comprobante detectado por IA.
+    await registrarPago(supabase, { tipo: "factura", comprobanteId: factura.id, monto: total, formaPagoId: (formData.get("pago_forma_pago_id") as string) || null, fecha: formData.get("pago_fecha") as string })
     revalidatePath("/pagos"); revalidatePath("/dashboard")
   }
 
