@@ -90,40 +90,58 @@ export default function Form({
         <option>Transferencia</option>
       </select>
 
-      <div className="grid grid-cols-2 gap-4">
-        <Input
-          type="number"
-          step="0.01"
-          min="0"
-          name="iibb_bsas"
-          placeholder="IIBB Buenos Aires (%)"
-          defaultValue={0}
-        />
+      <div className="rounded-lg border border-gray-200 bg-gray-50 p-4">
+        <div className="mb-3">
+          <h3 className="text-sm font-semibold text-gray-800">Ingresos Brutos (IIBB)</h3>
+          <p className="mt-1 text-xs text-gray-500">Indicá el porcentaje habitual que corresponde a este proveedor según jurisdicción.</p>
+        </div>
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+          <div>
+            <label htmlFor="iibb_bsas" className="mb-1 block text-sm font-medium text-gray-700">IIBB Buenos Aires (%)</label>
+            <Input
+              id="iibb_bsas"
+              type="number"
+              step="0.01"
+              min="0"
+              name="iibb_bsas"
+              defaultValue={0}
+              placeholder="Ej.: 3,50"
+            />
+          </div>
+          <div>
+            <label htmlFor="iibb_caba" className="mb-1 block text-sm font-medium text-gray-700">IIBB CABA (%)</label>
+            <Input
+              id="iibb_caba"
+              type="number"
+              step="0.01"
+              min="0"
+              name="iibb_caba"
+              defaultValue={0}
+              placeholder="Ej.: 3,00"
+            />
+          </div>
+        </div>
+      </div>
 
+      <div>
+        <label htmlFor="otros_cargos" className="mb-1 block text-sm font-medium text-gray-700">Otros cargos habituales</label>
         <Input
-          type="number"
-          step="0.01"
-          min="0"
-          name="iibb_caba"
-          placeholder="IIBB CABA (%)"
-          defaultValue={0}
+          id="otros_cargos"
+          name="otros_cargos"
+          placeholder="Ej.: flete, seguro u otro cargo"
         />
       </div>
 
-      <Input
-        name="otros_cargos"
-        placeholder="Otros cargos habituales"
-      />
-
-      <Input
-        name="etiqueta_1"
-        placeholder="Etiqueta 1"
-      />
-
-      <Input
-        name="etiqueta_2"
-        placeholder="Etiqueta 2"
-      />
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+        <div>
+          <label htmlFor="etiqueta_1" className="mb-1 block text-sm font-medium text-gray-700">Etiqueta 1</label>
+          <Input id="etiqueta_1" name="etiqueta_1" placeholder="Etiqueta" />
+        </div>
+        <div>
+          <label htmlFor="etiqueta_2" className="mb-1 block text-sm font-medium text-gray-700">Etiqueta 2</label>
+          <Input id="etiqueta_2" name="etiqueta_2" placeholder="Etiqueta" />
+        </div>
+      </div>
 
       <SubmitButton>
         Guardar proveedor
