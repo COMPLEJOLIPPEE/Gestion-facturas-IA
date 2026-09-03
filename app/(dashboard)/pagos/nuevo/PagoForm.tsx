@@ -6,12 +6,15 @@ import { crearPago } from "./actions"
 type Comprobante = {
   id: string
   numero: string | null
+  codigo_interno?: number
   proveedor: string
   total: number
   saldo: number
 }
 
 type FormaPago = { id: string; nombre: string }
+
+const formatoCodigoRemito = (codigo: number) => `R-${String(codigo).padStart(4, "0")}`
 
 export function PagoForm({
   facturas,
@@ -25,8 +28,21 @@ export function PagoForm({
   const [tipo, setTipo] = useState<"factura" | "remito">("factura")
   const [comprobanteId, setComprobanteId] = useState("")
   const [monto, setMonto] = useState<number>(0)
+  const [busqueda, setBusqueda] = useState("")
 
   const lista = tipo === "factura" ? facturas : remitos
+  const comprobantesVisibles = useMemo(() => {
+    const termino = busqueda.trim().toLowerCase()
+    if (!termino) return lista
+
+    return lista.filter((c) => {
+      const numero = (c.numero ?? "s/n").toLowerCase()
+      const proveedor = c.proveedor.toLowerCase()
+      const codigo = c.codigo_interno ? formatoCodigoRemito(c.codigo_interno).toLowerCase() : ""
+      return numero.includes(termino) || proveedor.includes(termino) || codigo.includes(termino)
+    })
+  }, [busqueda, lista])
+
   const comprobante = useMemo(() => lista.find((c) => c.id === comprobanteId), [lista, comprobanteId])
 
   const seleccionarComprobante = (id: string) => {
@@ -39,6 +55,7 @@ export function PagoForm({
     setTipo(nuevoTipo)
     setComprobanteId("")
     setMonto(0)
+    setBusqueda("")
   }
 
   return (
@@ -65,6 +82,15 @@ export function PagoForm({
           </button>
         </div>
 
+        <label className="mt-4 block text-sm text-gray-600">Buscar proveedor, factura o remito</label>
+        <input
+          type="search"
+          value={busqueda}
+          onChange={(e) => setBusqueda(e.target.value)}
+          placeholder={tipo === "factura" ? "Proveedor o número de factura..." : "Proveedor, número o código R-0001..."}
+          className="mt-1 w-full rounded border p-2"
+        />
+
         <label className="mt-4 block text-sm text-gray-600">Comprobante pendiente</label>
         <select
           value={comprobanteId}
@@ -73,15 +99,20 @@ export function PagoForm({
           className="mt-1 w-full rounded border p-2"
         >
           <option value="">Seleccionar comprobante</option>
-          {lista.map((c) => (
+          {comprobantesVisibles.map((c) => (
             <option key={c.id} value={c.id}>
+              {tipo === "remito" && c.codigo_interno ? `${formatoCodigoRemito(c.codigo_interno)} · ` : ""}
               {c.numero ?? "s/n"} — {c.proveedor} — saldo ${c.saldo.toLocaleString("es-AR")}
             </option>
           ))}
         </select>
 
+        {lista.length > 0 && comprobantesVisibles.length === 0 && (
+          <p className="mt-2 text-sm text-gray-500">No hay comprobantes pendientes que coincidan con la búsqueda.</p>
+        )}
+
         {lista.length === 0 && (
-          <p className="mt-2 text-sm text-gray-500">No hay {tipo === "factura" ? "facturas" : "remitos"} pendientes de pago.</p>
+          <p className="mt-2 text-sm text-gray-500">No hay {tipo === "factura" ? "facturas" : "remitos"} con saldo pendiente.</p>
         )}
 
         {comprobante && (
@@ -100,6 +131,7 @@ export function PagoForm({
             name="monto"
             step="0.01"
             min="0.01"
+            max={comprobante?.saldo}
             value={monto}
             onChange={(e) => setMonto(Number(e.target.value))}
             required
@@ -127,7 +159,7 @@ export function PagoForm({
 
       <button
         type="submit"
-        disabled={!comprobanteId || monto <= 0}
+        disabled={!comprobanteId || monto <= 0 || (comprobante ? monto > comprobante.saldo + 0.01 : true)}
         className="rounded bg-black px-5 py-2 text-white hover:opacity-80 disabled:opacity-40"
       >
         Registrar pago
