@@ -1,115 +1,84 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 
-type Company = { id: string; razon_social: string };
 type UserRow = {
   usuario_id: string;
+  auth_user_id: string;
   email: string;
   nombre: string;
   apellido: string;
   empresa_id: string;
-  empresa: string;
-  rol: string;
+  empresa_nombre: string;
+  rol: "superadmin" | "admin" | "usuario" | "consulta";
   activo: boolean;
-  email_confirmado: boolean;
-  ultimo_acceso: string | null;
-  creado: string | null;
 };
 
-const roleLabels: Record<string, string> = {
-  superadmin: "Super Admin",
-  admin: "Administrador",
-  usuario: "Usuario",
-  consulta: "Consulta",
-};
+type Company = { id: string; nombre: string };
 
-const roleOptions = ["superadmin", "admin", "usuario", "consulta"];
+const ROLES: { value: UserRow["rol"]; label: string }[] = [
+  { value: "superadmin", label: "Super Admin" },
+  { value: "admin", label: "Administrador" },
+  { value: "usuario", label: "Usuario" },
+  { value: "consulta", label: "Consulta" },
+];
 
 export default function UsuariosAdmin() {
-  const supabase = useMemo(() => createClient(), []);
+  const supabase = createClient();
   const [users, setUsers] = useState<UserRow[]>([]);
   const [companies, setCompanies] = useState<Company[]>([]);
+  const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
-  const [search, setSearch] = useState("");
   const [showCreate, setShowCreate] = useState(false);
   const [editing, setEditing] = useState<UserRow | null>(null);
-  const [form, setForm] = useState({ nombre: "", apellido: "", email: "", empresa_id: "", rol: "usuario" });
+  const [form, setForm] = useState({ nombre: "", apellido: "", email: "", empresa_id: "", rol: "usuario" as UserRow["rol"] });
 
-  async function call(action: string, payload: Record<string, unknown> = {}) {
-    const { data, error } = await supabase.functions.invoke("admin-usuarios", {
-      body: { action, ...payload },
-    });
-    if (error) throw new Error(error.message || "No se pudo completar la operación");
+  async function call(action: string, body: Record<string, unknown> = {}) {
+    const { data, error } = await supabase.functions.invoke("admin-usuarios", { body: { action, ...body } });
+    if (error) throw new Error(error.message);
     if (data?.error) throw new Error(data.error);
     return data;
   }
 
   async function load() {
-    setLoading(true);
-    setError("");
+    setLoading(true); setError("");
     try {
       const data = await call("list");
       setUsers(data.users ?? []);
       setCompanies(data.companies ?? []);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudieron cargar los usuarios");
-    } finally {
-      setLoading(false);
-    }
+    } catch (e) { setError(e instanceof Error ? e.message : "No se pudo cargar usuarios"); }
+    finally { setLoading(false); }
   }
 
   useEffect(() => { load(); }, []);
 
-  function openCreate() {
-    setError("");
-    setMessage("");
+  function resetForm() {
     setForm({ nombre: "", apellido: "", email: "", empresa_id: companies[0]?.id ?? "", rol: "usuario" });
-    setShowCreate(true);
-    setEditing(null);
   }
 
-  function openEdit(user: UserRow) {
-    setError("");
-    setMessage("");
-    setForm({ nombre: user.nombre, apellido: user.apellido, email: user.email, empresa_id: user.empresa_id, rol: user.rol });
-    setEditing(user);
-    setShowCreate(false);
-  }
-
-  async function submitCreate(e: React.FormEvent) {
-    e.preventDefault();
-    setSaving(true); setError(""); setMessage("");
+  async function createUser(e: React.FormEvent) {
+    e.preventDefault(); setSaving(true); setError(""); setMessage("");
     try {
       const data = await call("create", form);
-      setMessage(data.message ?? "Usuario creado");
-      setShowCreate(false);
-      await load();
+      setMessage(data.message ?? "Invitación enviada");
+      setShowCreate(false); resetForm(); await load();
     } catch (e) { setError(e instanceof Error ? e.message : "No se pudo crear el usuario"); }
     finally { setSaving(false); }
   }
 
-  async function submitEdit(e: React.FormEvent) {
-    e.preventDefault();
-    if (!editing) return;
-    setSaving(true); setError(""); setMessage("");
+  function startEdit(user: UserRow) {
+    setEditing(user); setForm({ nombre: user.nombre ?? "", apellido: user.apellido ?? "", email: user.email, empresa_id: user.empresa_id, rol: user.rol }); setError(""); setMessage("");
+  }
+
+  async function updateUser(e: React.FormEvent) {
+    e.preventDefault(); if (!editing) return; setSaving(true); setError(""); setMessage("");
     try {
-      const data = await call("update", {
-        usuario_id: editing.usuario_id,
-        empresa_actual_id: editing.empresa_id,
-        empresa_id: form.empresa_id,
-        rol: form.rol,
-        activo: editing.activo,
-        nombre: form.nombre,
-        apellido: form.apellido,
-      });
-      setMessage(data.message ?? "Usuario actualizado");
-      setEditing(null);
-      await load();
+      const data = await call("update", { usuario_id: editing.usuario_id, empresa_actual_id: editing.empresa_id, empresa_id: form.empresa_id, rol: form.rol, activo: editing.activo, nombre: form.nombre, apellido: form.apellido });
+      setMessage(data.message ?? "Usuario actualizado"); setEditing(null); await load();
     } catch (e) { setError(e instanceof Error ? e.message : "No se pudo actualizar el usuario"); }
     finally { setSaving(false); }
   }
@@ -119,7 +88,7 @@ export default function UsuariosAdmin() {
     setError(""); setMessage("");
     try {
       const { error } = await supabase.auth.resetPasswordForEmail(user.email, {
-        redirectTo: "https://gestion-facturas-ia.vercel.app/restablecer-password",
+        redirectTo: "https://gestion-facturas-ia.vercel.app/auth/callback?next=/restablecer-password",
       });
       if (error) throw new Error(error.message);
       setMessage(`Correo de restablecimiento enviado a ${user.email}`);
@@ -130,93 +99,37 @@ export default function UsuariosAdmin() {
     if (!confirm(`${user.activo ? "¿Desactivar" : "¿Activar"} el acceso de ${user.email}?`)) return;
     setError(""); setMessage("");
     try {
-      const data = await call("update", {
-        usuario_id: user.usuario_id,
-        empresa_actual_id: user.empresa_id,
-        empresa_id: user.empresa_id,
-        rol: user.rol,
-        activo: !user.activo,
-        nombre: user.nombre,
-        apellido: user.apellido,
-      });
-      setMessage(data.message ?? "Estado actualizado");
-      await load();
-    } catch (e) { setError(e instanceof Error ? e.message : "No se pudo cambiar el estado"); }
+      const data = await call("update", { usuario_id: user.usuario_id, empresa_actual_id: user.empresa_id, empresa_id: user.empresa_id, rol: user.rol, activo: !user.activo, nombre: user.nombre, apellido: user.apellido });
+      setMessage(data.message ?? "Estado actualizado"); await load();
+    } catch (e) { setError(e instanceof Error ? e.message : "No se pudo actualizar el estado"); }
   }
 
   async function deleteAccess(user: UserRow) {
-    const text = `¿Eliminar el acceso de ${user.email} a ${user.empresa}?${"\n\nSi no tiene otra empresa asignada, también se eliminará su cuenta."}`;
-    if (!confirm(text)) return;
+    if (!confirm(`¿Eliminar el acceso de ${user.email} a esta empresa?`)) return;
     setError(""); setMessage("");
     try {
       const data = await call("delete", { usuario_id: user.usuario_id, empresa_id: user.empresa_id });
-      setMessage(data.message ?? "Acceso eliminado");
-      await load();
+      setMessage(data.message ?? "Acceso eliminado"); await load();
     } catch (e) { setError(e instanceof Error ? e.message : "No se pudo eliminar el acceso"); }
   }
 
-  const filtered = users.filter((u) => `${u.nombre} ${u.apellido} ${u.email} ${u.empresa} ${u.rol}`.toLowerCase().includes(search.toLowerCase()));
+  const filtered = users.filter(u => `${u.nombre} ${u.apellido} ${u.email} ${u.empresa_nombre}`.toLowerCase().includes(search.toLowerCase()));
 
   return (
-    <section className="mt-6 rounded-xl border bg-white p-6 shadow-sm">
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          <h3 className="text-xl font-semibold">Usuarios</h3>
-          <p className="mt-1 text-sm text-gray-500">Administrá cuentas, perfiles y accesos por empresa.</p>
-        </div>
-        <button onClick={openCreate} className="rounded-lg bg-black px-4 py-2 text-sm font-medium text-white hover:bg-gray-800">+ Nuevo usuario</button>
+    <div className="space-y-6">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div><h1 className="text-2xl font-bold">Usuarios</h1><p className="text-sm text-gray-600">Administración de accesos al sistema.</p></div>
+        <button onClick={() => { resetForm(); setShowCreate(true); setEditing(null); }} className="rounded-lg bg-black px-4 py-2.5 font-medium text-white">+ Nuevo usuario</button>
       </div>
-
-      {message && <div className="mt-4 rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">{message}</div>}
-      {error && <div className="mt-4 rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
-
-      <div className="mt-5">
-        <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Buscar por nombre, email, empresa o rol..." className="w-full rounded-lg border px-4 py-2 text-sm outline-none focus:border-black" />
+      {message && <div className="rounded-lg border border-green-200 bg-green-50 p-3 text-sm text-green-700">{message}</div>}
+      {error && <div className="rounded-lg border border-red-200 bg-red-50 p-3 text-sm text-red-700">{error}</div>}
+      <input value={search} onChange={e => setSearch(e.target.value)} placeholder="Buscar por nombre, email o empresa..." className="w-full rounded-lg border bg-white px-3 py-2.5" />
+      <div className="overflow-x-auto rounded-xl border bg-white shadow-sm">
+        <table className="min-w-full text-sm"><thead className="bg-gray-50 text-left"><tr><th className="px-4 py-3">Usuario</th><th className="px-4 py-3">Empresa</th><th className="px-4 py-3">Rol</th><th className="px-4 py-3">Estado</th><th className="px-4 py-3 text-right">Acciones</th></tr></thead>
+          <tbody>{loading ? <tr><td colSpan={5} className="px-4 py-8 text-center text-gray-500">Cargando...</td></tr> : filtered.map(user => <tr key={user.usuario_id} className="border-t"><td className="px-4 py-3"><div className="font-medium">{user.nombre} {user.apellido}</div><div className="text-xs text-gray-500">{user.email}</div></td><td className="px-4 py-3">{user.empresa_nombre}</td><td className="px-4 py-3">{ROLES.find(r => r.value === user.rol)?.label ?? user.rol}</td><td className="px-4 py-3"><span className={`rounded-full px-2 py-1 text-xs font-medium ${user.activo ? "bg-green-100 text-green-700" : "bg-gray-100 text-gray-600"}`}>{user.activo ? "Activo" : "Inactivo"}</span></td><td className="px-4 py-3 text-right"><div className="flex flex-wrap justify-end gap-2"><button onClick={() => startEdit(user)} className="rounded border px-2.5 py-1.5">Editar</button><button onClick={() => resetPassword(user)} className="rounded border px-2.5 py-1.5">Reset contraseña</button><button onClick={() => toggleActive(user)} className="rounded border px-2.5 py-1.5">{user.activo ? "Desactivar" : "Activar"}</button><button onClick={() => deleteAccess(user)} className="rounded border border-red-200 px-2.5 py-1.5 text-red-600">Eliminar acceso</button></div></td></tr>)}</tbody>
+        </table>
       </div>
-
-      {showCreate && (
-        <form onSubmit={submitCreate} className="mt-5 rounded-xl border bg-gray-50 p-5">
-          <div className="mb-4 flex items-center justify-between"><h4 className="font-semibold">Nuevo usuario</h4><button type="button" onClick={() => setShowCreate(false)} className="text-sm text-gray-500">Cancelar</button></div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <input required value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} placeholder="Nombre" className="rounded-lg border bg-white px-3 py-2 text-sm" />
-            <input value={form.apellido} onChange={(e) => setForm({ ...form, apellido: e.target.value })} placeholder="Apellido" className="rounded-lg border bg-white px-3 py-2 text-sm" />
-            <input required type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} placeholder="Email" className="rounded-lg border bg-white px-3 py-2 text-sm" />
-            <select required value={form.empresa_id} onChange={(e) => setForm({ ...form, empresa_id: e.target.value })} className="rounded-lg border bg-white px-3 py-2 text-sm"><option value="">Empresa</option>{companies.map((c) => <option key={c.id} value={c.id}>{c.razon_social}</option>)}</select>
-            <select value={form.rol} onChange={(e) => setForm({ ...form, rol: e.target.value })} className="rounded-lg border bg-white px-3 py-2 text-sm">{roleOptions.map((r) => <option key={r} value={r}>{roleLabels[r]}</option>)}</select>
-          </div>
-          <p className="mt-3 text-xs text-gray-500">No se solicita contraseña. Se enviará un correo de invitación para que el usuario configure su acceso.</p>
-          <button disabled={saving} className="mt-4 rounded-lg bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50">{saving ? "Creando..." : "Crear usuario y enviar invitación"}</button>
-        </form>
-      )}
-
-      {editing && (
-        <form onSubmit={submitEdit} className="mt-5 rounded-xl border bg-gray-50 p-5">
-          <div className="mb-4 flex items-center justify-between"><div><h4 className="font-semibold">Editar usuario</h4><p className="text-xs text-gray-500">{editing.email}</p></div><button type="button" onClick={() => setEditing(null)} className="text-sm text-gray-500">Cancelar</button></div>
-          <div className="grid gap-4 md:grid-cols-2">
-            <input required value={form.nombre} onChange={(e) => setForm({ ...form, nombre: e.target.value })} placeholder="Nombre" className="rounded-lg border bg-white px-3 py-2 text-sm" />
-            <input value={form.apellido} onChange={(e) => setForm({ ...form, apellido: e.target.value })} placeholder="Apellido" className="rounded-lg border bg-white px-3 py-2 text-sm" />
-            <select required value={form.empresa_id} onChange={(e) => setForm({ ...form, empresa_id: e.target.value })} className="rounded-lg border bg-white px-3 py-2 text-sm">{companies.map((c) => <option key={c.id} value={c.id}>{c.razon_social}</option>)}</select>
-            <select value={form.rol} onChange={(e) => setForm({ ...form, rol: e.target.value })} className="rounded-lg border bg-white px-3 py-2 text-sm">{roleOptions.map((r) => <option key={r} value={r}>{roleLabels[r]}</option>)}</select>
-          </div>
-          <button disabled={saving} className="mt-4 rounded-lg bg-black px-4 py-2 text-sm font-medium text-white disabled:opacity-50">{saving ? "Guardando..." : "Guardar cambios"}</button>
-        </form>
-      )}
-
-      <div className="mt-5 overflow-x-auto rounded-lg border">
-        {loading ? <div className="p-8 text-center text-sm text-gray-500">Cargando usuarios...</div> : filtered.length === 0 ? <div className="p-8 text-center text-sm text-gray-500">No hay usuarios que coincidan con la búsqueda.</div> : (
-          <table className="w-full text-left text-sm">
-            <thead className="bg-gray-50 text-gray-500"><tr><th className="px-3 py-3">Usuario</th><th className="px-3 py-3">Empresa</th><th className="px-3 py-3">Rol</th><th className="px-3 py-3">Estado</th><th className="px-3 py-3">Acciones</th></tr></thead>
-            <tbody>{filtered.map((u) => <tr key={`${u.usuario_id}-${u.empresa_id}`} className="border-t">
-              <td className="px-3 py-4"><div className="font-medium">{u.nombre || u.apellido ? `${u.nombre} ${u.apellido}`.trim() : "Sin nombre"}</div><div className="text-xs text-gray-500">{u.email}</div><div className="mt-1 text-xs">{u.email_confirmado ? "✓ Email confirmado" : "• Invitación pendiente"}</div></td>
-              <td className="px-3 py-4">{u.empresa}</td>
-              <td className="px-3 py-4">{roleLabels[u.rol] ?? u.rol}</td>
-              <td className="px-3 py-4"><span className={`rounded-full px-2 py-1 text-xs font-medium ${u.activo ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"}`}>{u.activo ? "Activo" : "Inactivo"}</span></td>
-              <td className="px-3 py-4"><div className="flex flex-wrap gap-2"><button onClick={() => openEdit(u)} className="rounded border px-2 py-1 text-xs hover:bg-gray-50">Editar</button><button onClick={() => resetPassword(u)} className="rounded border px-2 py-1 text-xs hover:bg-gray-50">Reset contraseña</button><button onClick={() => toggleActive(u)} className="rounded border px-2 py-1 text-xs hover:bg-gray-50">{u.activo ? "Desactivar" : "Activar"}</button><button onClick={() => deleteAccess(u)} className="rounded border border-red-200 px-2 py-1 text-xs text-red-600 hover:bg-red-50">Eliminar acceso</button></div></td>
-            </tr>)}</tbody>
-          </table>
-        )}
-      </div>
-      <p className="mt-3 text-xs text-gray-400">Mostrando {filtered.length} asignaciones de acceso.</p>
-    </section>
+      {(showCreate || editing) && <div className="rounded-xl border bg-white p-5 shadow-sm"><h2 className="text-lg font-semibold">{editing ? "Editar usuario" : "Nuevo usuario"}</h2>{!editing && <p className="mt-1 text-sm text-gray-500">Se enviará una invitación por email para que configure su contraseña.</p>}<form onSubmit={editing ? updateUser : createUser} className="mt-5 grid gap-4 sm:grid-cols-2"><div><label className="mb-1 block text-sm font-medium">Nombre</label><input required value={form.nombre} onChange={e => setForm({...form,nombre:e.target.value})} className="w-full rounded-lg border px-3 py-2" /></div><div><label className="mb-1 block text-sm font-medium">Apellido</label><input value={form.apellido} onChange={e => setForm({...form,apellido:e.target.value})} className="w-full rounded-lg border px-3 py-2" /></div>{!editing && <div><label className="mb-1 block text-sm font-medium">Email</label><input required type="email" value={form.email} onChange={e => setForm({...form,email:e.target.value})} className="w-full rounded-lg border px-3 py-2" /></div>}<div><label className="mb-1 block text-sm font-medium">Empresa</label><select required value={form.empresa_id} onChange={e => setForm({...form,empresa_id:e.target.value})} className="w-full rounded-lg border px-3 py-2"><option value="">Seleccionar...</option>{companies.map(c => <option key={c.id} value={c.id}>{c.nombre}</option>)}</select></div><div><label className="mb-1 block text-sm font-medium">Rol</label><select value={form.rol} onChange={e => setForm({...form,rol:e.target.value as UserRow["rol"]})} className="w-full rounded-lg border px-3 py-2">{ROLES.map(r => <option key={r.value} value={r.value}>{r.label}</option>)}</select></div><div className="flex gap-2 sm:col-span-2"><button disabled={saving} className="rounded-lg bg-black px-4 py-2.5 font-medium text-white disabled:opacity-50">{saving ? "Guardando..." : editing ? "Guardar cambios" : "Enviar invitación"}</button><button type="button" onClick={() => {setShowCreate(false);setEditing(null)}} className="rounded-lg border px-4 py-2.5">Cancelar</button></div></form></div>}
+    </div>
   );
 }
