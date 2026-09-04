@@ -25,6 +25,7 @@ type ItemInput = {
   cantidad_bonificada?: number | null
   cantidad_bonificada_detalle?: number | null
   impuestos_internos?: number | null
+  cargos?: CargoInput[]
   tipo_linea?: "producto" | "ajuste"
   es_ajuste_negativo?: boolean
   descripcionLeida?: string | null
@@ -34,6 +35,26 @@ function numero(valor: unknown) { const resultado = Number(valor ?? 0); return N
 function redondear(valor: number) { return Number(valor.toFixed(2)) }
 function coincide(a: number, b: number) { return Math.abs(a - b) <= 0.50 }
 const EMPRESA_COOKIE = "factura_ia_empresa_activa"
+
+function calcularLinea(item: ItemInput) {
+  const cantidad = Math.max(0, numero(item.cantidad))
+  const precioUnitario = numero(item.precio_unitario)
+  const bruto = cantidad * Math.abs(precioUnitario)
+  const ajuste = item.tipo_linea === "ajuste" || item.es_ajuste_negativo === true || precioUnitario < 0
+  const descuento = ajuste ? 0 : Math.abs(numero(item.descuento))
+  const bonificacion = ajuste ? 0 : Math.abs(numero(item.bonificacion))
+  const cargo = (item.cargos ?? []).reduce((s, c) => s + Math.abs(numero(c.importe)), 0)
+  const subtotalExplicito = item.subtotal_neto != null && Number.isFinite(Number(item.subtotal_neto)) ? numero(item.subtotal_neto) : null
+  const subtotalNeto = ajuste
+    ? -(subtotalExplicito != null && subtotalExplicito !== 0 ? Math.abs(subtotalExplicito) : Math.abs(bruto))
+    : subtotalExplicito != null
+      ? Math.abs(subtotalExplicito)
+      : Math.max(0, bruto + cargo - descuento - bonificacion)
+  const ivaImporte = item.iva_importe != null && numero(item.iva_importe) !== 0 ? (ajuste ? -Math.abs(numero(item.iva_importe)) : Math.abs(numero(item.iva_importe))) : redondear(subtotalNeto * (numero(item.iva) / 100))
+  const impuestosInternos = ajuste ? -Math.abs(numero(item.impuestos_internos)) : Math.abs(numero(item.impuestos_internos))
+  const precioNetoUnitario = cantidad > 0 ? subtotalNeto / cantidad : precioUnitario
+  return { cantidad, precioUnitario, bruto, ajuste, descuento, bonificacion, cargo, subtotalNeto, ivaImporte, impuestosInternos, precioNetoUnitario }
+}
 
 export async function crearFactura(formData: FormData) {
   const supabase = await createClient()
@@ -62,25 +83,14 @@ export async function crearFactura(formData: FormData) {
   const otrosCargos = cargos.filter((cargo) => !/impuestos?\s+internos?/i.test(cargo.descripcion))
   const totalImpuestosInternosCargo = cargosInternos.reduce((acc, cargo) => acc + numero(cargo.importe), 0)
   const totalOtrosCargos = otrosCargos.reduce((acc, cargo) => acc + numero(cargo.importe), 0)
-  const totalCargos = redondear(totalImpuestosInternosCargo + totalOtrosCargos)
 
   const resumen = items.reduce((acc, item) => {
-    const cantidad = Math.max(0, numero(item.cantidad))
-    const precioUnitario = numero(item.precio_unitario)
-    const bruto = cantidad * precioUnitario
-    const esAjusteNegativo = item.tipo_linea === "ajuste" || item.es_ajuste_negativo === true || bruto < 0
-    const descuento = esAjusteNegativo ? 0 : Math.abs(numero(item.descuento))
-    const bonificacion = esAjusteNegativo ? 0 : Math.abs(numero(item.bonificacion))
-    const cantidadBonificada = Math.min(Math.max(0, numero(item.cantidad_bonificada ?? item.cantidad_bonificada_detalle)), cantidad)
-    const porCantidad = item.tipo_bonificacion === "cantidad"
-    const bonificacionImporte = porCantidad ? cantidadBonificada * Math.abs(precioUnitario) : bonificacion
-    const subtotalNeto = esAjusteNegativo ? -Math.abs(numero(item.subtotal_neto ?? bruto)) : Math.max(0, bruto - descuento - bonificacionImporte)
-    const ivaImporte = numero(item.iva_importe) !== 0 ? numero(item.iva_importe) : subtotalNeto * (numero(item.iva) / 100)
-    acc.subtotalBruto += bruto
-    acc.descuentos += esAjusteNegativo ? Math.abs(subtotalNeto) : descuento + bonificacionImporte
-    acc.subtotalNeto += subtotalNeto
-    acc.iva += esAjusteNegativo ? -Math.abs(ivaImporte) : ivaImporte
-    acc.impuestosInternos += esAjusteNegativo ? -Math.abs(numero(item.impuestos_internos)) : numero(item.impuestos_internos)
+    const l = calcularLinea(item)
+    acc.subtotalBruto += l.bruto
+    acc.descuentos += l.descuento + l.bonificacion
+    acc.subtotalNeto += l.subtotalNeto
+    acc.iva += l.ivaImporte
+    acc.impuestosInternos += l.impuestosInternos
     return acc
   }, { subtotalBruto: 0, descuentos: 0, subtotalNeto: 0, iva: 0, impuestosInternos: 0 })
 
@@ -108,21 +118,31 @@ export async function crearFactura(formData: FormData) {
   if (errorFactura || !factura) throw new Error(`Error creando factura: ${errorFactura?.message}`)
 
   const itemsParaGuardar = items.map((item) => {
-    const cantidad = Math.max(0, numero(item.cantidad))
-    const brutoUnitario = numero(item.precio_unitario)
-    const bruto = cantidad * brutoUnitario
-    const esAjusteNegativo = item.tipo_linea === "ajuste" || item.es_ajuste_negativo === true || bruto < 0
-    const descuento = esAjusteNegativo ? 0 : Math.abs(numero(item.descuento))
-    const bonificacion = esAjusteNegativo ? 0 : Math.abs(numero(item.bonificacion))
-    const cantidadBonificada = Math.min(Math.max(0, numero(item.cantidad_bonificada ?? item.cantidad_bonificada_detalle)), cantidad)
-    const porCantidad = item.tipo_bonificacion === "cantidad"
-    const bonificacionImporte = porCantidad ? cantidadBonificada * Math.abs(brutoUnitario) : bonificacion
-    const subtotalNeto = esAjusteNegativo ? -Math.abs(numero(item.subtotal_neto ?? bruto)) : Math.max(0, bruto - descuento - bonificacionImporte)
-    const precioNetoUnitario = cantidad > 0 ? subtotalNeto / cantidad : brutoUnitario
-    const ivaImporte = numero(item.iva_importe) !== 0 ? (esAjusteNegativo ? -Math.abs(numero(item.iva_importe)) : numero(item.iva_importe)) : subtotalNeto * (numero(item.iva) / 100)
-    const impuestosInternos = esAjusteNegativo ? -Math.abs(numero(item.impuestos_internos)) : numero(item.impuestos_internos)
-    const descuentosDetalle = [...(item.descuentos ?? []), ...(item.grupo_descuento ? [{ descripcion: item.grupo_descuento, importe: descuento }] : [])]
-    return { factura_id: factura.id, producto_id: esAjusteNegativo ? null : item.producto_id, descripcion: item.descripcionLeida ?? null, tipo_linea: esAjusteNegativo ? "ajuste" : "producto", es_ajuste_negativo: esAjusteNegativo, cantidad, precio_unitario: redondear(esAjusteNegativo ? -Math.abs(brutoUnitario) : brutoUnitario), iva: numero(item.iva), "alicuota IVA": numero(item.iva), descuento, precio_final: redondear(precioNetoUnitario), precio_bruto_unitario: redondear(esAjusteNegativo ? -Math.abs(brutoUnitario) : brutoUnitario), descuento_importe: redondear(descuento), bonificacion_importe: redondear(bonificacionImporte), precio_neto_unitario: redondear(precioNetoUnitario), subtotal_neto: redondear(subtotalNeto), iva_importe: redondear(ivaImporte), impuestos_internos: redondear(impuestosInternos), descuentos_detalle: descuentosDetalle.length ? descuentosDetalle : null, bonificacion_tipo: item.tipo_bonificacion ?? null, cantidad_bonificada: cantidadBonificada || null }
+    const l = calcularLinea(item)
+    const descuentosDetalle = [...(item.descuentos ?? []), ...(item.grupo_descuento ? [{ descripcion: item.grupo_descuento, importe: l.descuento }] : [])]
+    return {
+      factura_id: factura.id,
+      producto_id: l.ajuste ? null : item.producto_id,
+      descripcion: item.descripcionLeida ?? null,
+      tipo_linea: l.ajuste ? "ajuste" : "producto",
+      es_ajuste_negativo: l.ajuste,
+      cantidad: l.cantidad,
+      precio_unitario: redondear(l.ajuste ? -Math.abs(l.precioUnitario) : Math.abs(l.precioUnitario)),
+      iva: numero(item.iva),
+      "alicuota IVA": numero(item.iva),
+      descuento: redondear(l.descuento),
+      precio_final: redondear(l.precioNetoUnitario),
+      precio_bruto_unitario: redondear(l.ajuste ? -Math.abs(l.precioUnitario) : Math.abs(l.precioUnitario)),
+      descuento_importe: redondear(l.descuento),
+      bonificacion_importe: redondear(l.bonificacion),
+      precio_neto_unitario: redondear(l.precioNetoUnitario),
+      subtotal_neto: redondear(l.subtotalNeto),
+      iva_importe: redondear(l.ivaImporte),
+      impuestos_internos: redondear(l.impuestosInternos),
+      descuentos_detalle: descuentosDetalle.length ? descuentosDetalle : null,
+      bonificacion_tipo: item.tipo_bonificacion ?? null,
+      cantidad_bonificada: numero(item.cantidad_bonificada ?? item.cantidad_bonificada_detalle) || null,
+    }
   })
 
   const { error: errorItems } = await supabase.from("factura_items").insert(itemsParaGuardar as never[])
@@ -140,9 +160,6 @@ export async function crearFactura(formData: FormData) {
   }
 
   if (formData.get("pagar_al_cargar") === "1") {
-    // El importe del pago automático debe ser exactamente el total que se guardó
-    // en la factura. Esto evita diferencias de centavos entre el cálculo de líneas
-    // y el total oficial del comprobante detectado por IA.
     await registrarPago(supabase, { tipo: "factura", comprobanteId: factura.id, monto: total, formaPagoId: (formData.get("pago_forma_pago_id") as string) || null, fecha: formData.get("pago_fecha") as string })
     revalidatePath("/pagos"); revalidatePath("/dashboard")
   }
