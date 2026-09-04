@@ -49,7 +49,7 @@ Analizá TODO el documento antes de responder y devolvé únicamente el JSON sol
 
 La factura es una TABLA VISUAL. Reconstruí la relación entre encabezado, columna y fila; no leas solamente texto lineal.
 
-REGLAS:
+REGLAS GENERALES:
 - No omitas ninguna fila comercial visible que tenga descripción e importe.
 - Clasificá cada fila como producto, descuento_linea, descuento_agrupado o ajuste.
 - Un descuento/bonificación general que afecta a varios productos debe quedar como línea independiente y NO asociarse a ningún producto.
@@ -59,9 +59,24 @@ REGLAS:
 - No confundas cargos con impuestos.
 - Una bonificación por cantidad (ej. 3+1) conserva cantidad_bonificada y no se convierte automáticamente en descuento monetario.
 
+IVA - REGLA CRÍTICA:
+- Buscá primero el cuadro/resumen fiscal donde aparecen "IVA 21%", "IVA 10,5%", "IVA 27%", "IVA 5%", "IVA 2,5%" o "IVA 0%".
+- Si allí aparece un importe distinto de 0 para una alícuota, esa alícuota es la fuente de verdad. NO asumas 21% por defecto.
+- Si la tabla no tiene columna IVA pero el pie fiscal informa una sola alícuota no nula para las líneas gravadas, asigná esa alícuota a las líneas aunque no la incluyas en columnas_presentes.
+- Si el pie informa IVA 10,5%, jamás devuelvas 21% por asumir que el proveedor es Responsable Inscripto.
+- iva_importe es solamente el IVA de la línea, no el total de la línea.
+- No confundas IVA con percepción de IVA.
+
+DESCUENTOS:
+- Leé literalmente las columnas DTO., Dto., Descuento, Bonif. y equivalentes.
+- Si hay un porcentaje de descuento, guardalo en porcentaje_descuento y calculá su importe.
+- Si hay varios descuentos sucesivos, guardalos en descuentos[] y aplicalos en secuencia; no los sumes como porcentajes simples.
+- Si el comprobante imprime precio neto unitario o subtotal neto, ese valor tiene prioridad y no debe volver a descontarse.
+
 IMPORTES:
-- Si la factura imprime subtotal/importe neto de una línea, ese importe tiene prioridad sobre cualquier cálculo.
-- No vuelvas a aplicar un descuento ya incorporado en el importe neto impreso.
+- Si la factura imprime subtotal neto de una línea, usalo como subtotal_neto.
+- Si imprime precio neto unitario pero no subtotal neto, calculá subtotal_neto = precio_neto_unitario × cantidad.
+- Si imprime IMPORTE/TOTAL de línea incluyendo IVA, NO lo guardes como subtotal_neto; usalo para validar precio neto + IVA + impuestos internos.
 - Los totales del pie son la fuente de verdad para validar subtotal, IVA, impuestos y total.
 - No fuerces las líneas para hacer coincidir el total.
 
