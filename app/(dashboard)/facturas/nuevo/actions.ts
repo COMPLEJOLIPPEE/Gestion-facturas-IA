@@ -18,9 +18,12 @@ type ItemInput = {
   iva: number
   iva_importe?: number | null
   descuento?: number
+  descuento_porcentaje?: number | null
+  tipo_descuento?: "porcentaje" | "importe" | null
   descuentos?: DescuentoDetalle[]
   grupo_descuento?: string | null
   bonificacion?: number | null
+  bonificacion_porcentaje?: number | null
   tipo_bonificacion?: "porcentaje" | "cantidad" | "importe" | null
   cantidad_bonificada?: number | null
   cantidad_bonificada_detalle?: number | null
@@ -120,7 +123,9 @@ export async function crearFactura(formData: FormData) {
 
   const itemsParaGuardar = items.map((item) => {
     const l = calcularLinea(item)
-    const descuentosDetalle = [...(item.descuentos ?? []), ...(item.grupo_descuento ? [{ descripcion: item.grupo_descuento, importe: l.descuento }] : [])]
+    const descuentosDetalle: DescuentoDetalle[] = [...(item.descuentos ?? [])]
+    if (item.descuento_porcentaje != null) descuentosDetalle.push({ descripcion: "Descuento porcentual", porcentaje: Math.abs(numero(item.descuento_porcentaje)), importe: redondear(l.descuento) })
+    if (item.grupo_descuento) descuentosDetalle.push({ descripcion: item.grupo_descuento, importe: l.descuento })
     return {
       factura_id: factura.id,
       producto_id: l.ajuste ? null : item.producto_id,
