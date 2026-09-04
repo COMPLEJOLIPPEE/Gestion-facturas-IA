@@ -1,7 +1,6 @@
 'use client'
 
 type Producto = { id: string; nombre: string; codigo: string | null; marca?: string | null; categoria?: string | null }
-
 type CargoLinea = { descripcion: string; importe: number }
 export type LineaFactura = {
   producto_id: string; cantidad: number; precio_unitario: number; iva: number; descuento: number; precio_final: number
@@ -45,12 +44,27 @@ function columnasFallback(lineas: LineaFactura[]) {
 export default function ProductosFactura({ productos, lineas, agregarLinea, quitarLinea, actualizarLinea, actualizarProductoDeLinea, crearProductoDesdeLinea }: Props) {
   const columnas = lineas.find((l) => l.columnas_presentes?.length)?.columnas_presentes ?? columnasFallback(lineas)
   const tiene = (clave: string) => columnas.includes(clave)
+  const tasasIVA = Array.from(new Set(lineas.filter((l) => l.tipo_linea !== "ajuste" && !l.es_ajuste_negativo).map((l) => numero(l.iva)).filter((v) => v >= 0)))
+  const ivaUnicoOculto = !tiene("iva") && tasasIVA.length === 1
+
+  const cambiarIVAUnico = (valor: number) => {
+    lineas.forEach((linea, index) => {
+      if (linea.tipo_linea !== "ajuste" && !linea.es_ajuste_negativo) actualizarLinea(index, "iva", valor)
+    })
+  }
 
   return <div className="rounded-xl bg-white p-6 shadow">
     <div className="mb-6 flex items-center justify-between">
       <div><h2 className="text-xl font-semibold">Productos</h2><p className="mt-1 text-sm text-gray-500">La tabla respeta las columnas que realmente aparecen en la factura.</p></div>
       <button type="button" onClick={agregarLinea} className="rounded-lg bg-black px-4 py-2 text-sm text-white hover:opacity-90">+ Agregar producto</button>
     </div>
+
+    {ivaUnicoOculto && <div className="mb-4 flex items-center justify-end gap-3 rounded-lg border border-blue-200 bg-blue-50 p-3 text-sm">
+      <span className="font-medium text-blue-900">IVA aplicado a las líneas</span>
+      <select value={tasasIVA[0]} onChange={(e) => cambiarIVAUnico(Number(e.target.value))} className="rounded border border-blue-300 bg-white p-2 font-medium">
+        <option value={21}>21%</option><option value={10.5}>10,5%</option><option value={27}>27%</option><option value={5}>5%</option><option value={2.5}>2,5%</option><option value={0}>0%</option>
+      </select>
+    </div>}
 
     {lineas.length === 0 && <div className="rounded-lg border border-dashed p-10 text-center text-gray-500">Todavía no hay productos cargados.</div>}
 
@@ -88,7 +102,7 @@ export default function ProductosFactura({ productos, lineas, agregarLinea, quit
             if (col === "descuento") return <span className="block text-right">${dinero(descuento)}</span>
             if (col === "bonificacion") return <span className="block text-right">${dinero(bonificacion)}</span>
             if (col === "precio_neto_unitario") return <span className="block text-right font-medium">${dinero(precioNeto)}</span>
-            if (col === "iva") return <select value={linea.iva} onChange={(e) => actualizarLinea(index, "iva", Number(e.target.value))} className="w-20 rounded border p-2"><option value={21}>21%</option><option value={10.5}>10,5%</option><option value={27}>27%</option><option value={0}>0%</option></select>
+            if (col === "iva") return <select value={linea.iva} onChange={(e) => actualizarLinea(index, "iva", Number(e.target.value))} className="w-20 rounded border p-2"><option value={21}>21%</option><option value={10.5}>10,5%</option><option value={27}>27%</option><option value={5}>5%</option><option value={2.5}>2,5%</option><option value={0}>0%</option></select>
             if (col === "iva_importe") return <span className="block text-right">${dinero(iva)}</span>
             if (col === "impuestos_internos") return <span className="block text-right">${dinero(internos)}</span>
             if (col === "cargo") return <span className="block text-right">${dinero(cargos)}</span>
