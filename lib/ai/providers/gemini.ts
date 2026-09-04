@@ -26,24 +26,33 @@ I.I | I.I. | I INTERNOS | I. INTERNOS | I INTERNO | I. INTERNO |
 IMP I | IMP.I | IMP INT | IMP. INT | IMP INTERNO | IMP. INTERNO |
 IMP INTERNOS | IMP. INTERNOS | CARGOS INT | CARGOS INTERNOS.
 
-Todos estos encabezados significan exactamente la columna impuestos_internos.
-Si existe una columna con cualquiera de estas variantes, hay que leer el importe alineado en esa columna para CADA FILA.
+Todos estos encabezados significan la columna impuestos_internos.
+Si existe una columna con cualquiera de estas variantes, leer el importe alineado en esa columna para CADA FILA.
 No confundirla con IVA, IVA $, descuento, precio neto ni total.
-La posición visual de la columna debe conservarse aunque el OCR haya separado o abreviado el encabezado.
-Si la columna existe pero una fila está vacía, devolver 0 para esa fila.
+Si la columna existe pero una fila tiene 0 o está vacía, devolver 0 para esa fila.
 `
 
-const DICCIONARIO_DESCUENTOS = `
-REGLAS PARA DESCUENTOS Y BONIFICACIONES:
-- Nunca omitas una fila de la tabla que tenga descripción y un importe, aunque no sea un producto.
-- Una fila que represente una reducción del importe debe conservarse como línea y marcarse como descuento_linea, descuento_agrupado o ajuste.
-- Si la descripción combina un porcentaje con una marca/producto/presentación, es un descuento agrupado aunque no diga literalmente "descuento".
-- Ejemplos: "30 Power 500" significa 30% de descuento sobre los productos Powerade de 500 ml; "PWD 1.500-25%-PDV" significa 25% de descuento sobre los productos Powerade de 1,5 litros.
-- PWD, POW, POWER y POWERADE pueden referirse a la misma marca/producto según el comprobante.
-- 500, 500ML, 500X6 representan una presentación de 500 ml; 1.5L, 1.500, 1500ML representan una presentación de 1,5 litros.
-- Para un descuento agrupado, completá porcentaje_descuento y aplica_a_descripciones con una descripción suficientemente amplia para encontrar TODAS las líneas afectadas.
-- Si el comprobante muestra el importe total del descuento en el pie, también informalo en descuento_total.
-- No conviertas una línea de descuento agrupado en producto y no la asocies a un producto del catálogo.
+const REGLAS_LINEAS = `
+REGLAS OBLIGATORIAS PARA LAS FILAS:
+- No omitas ninguna fila comercial visible que tenga descripción y un importe.
+- Cada fila debe clasificarse como producto, descuento_linea, descuento_agrupado o ajuste.
+- Una línea de descuento o bonificación que afecta a varios productos NO se debe asociar a ningún producto del catálogo.
+- En esos casos conservá la línea independiente y su importe como reducción.
+- No intentes repartir un descuento agrupado entre los productos salvo que la factura lo haga explícitamente.
+- No conviertas una línea de descuento agrupado en producto.
+- Si una fila tiene un cargo propio por logística, administración u otro concepto, conservá ese cargo en cargos de la línea y también el subtotal/importe final de la línea si está impreso.
+- Los cargos son positivos; descuentos y bonificaciones son reducciones.
+- Una bonificación por cantidad (por ejemplo 3+1) debe conservar la cantidad bonificada y no convertirse automáticamente en descuento monetario.
+`
+
+const COLUMNAS = `
+ESTRUCTURA VISUAL DE LA TABLA:
+- Detectá las columnas que REALMENTE aparecen en la tabla de productos.
+- Devolvé en columnas_presentes las claves canónicas, en el mismo orden visual en que aparecen.
+- Claves permitidas: cantidad, descripcion, codigo, precio_unitario, descuento, bonificacion, precio_neto_unitario, iva, iva_importe, impuestos_internos, cargo, subtotal_neto, importe.
+- Si una columna existe en el documento pero sus valores son 0, IGUAL debe aparecer en columnas_presentes.
+- Si una columna no existe, NO la incluyas.
+- No agregues columnas solamente porque el modelo conozca ese dato.
 `
 
 export async function extraerConGemini(base64: string, mimeType: string, tipo: TipoComprobanteIA): Promise<ComprobanteExtraido> {
@@ -62,26 +71,19 @@ ${contexto}
 Analizá TODO el documento antes de responder.
 Devolvé únicamente un JSON válido siguiendo exactamente el schema recibido.
 
-==================================================
-DICCIONARIO DE COLUMNAS — OBLIGATORIO
+IMPORTANTE: una factura es una tabla visual. No la leas solamente como texto lineal.
+Reconstruí la relación entre encabezado, columna y fila.
+
 ==================================================
 ${DICCIONARIO_IMPUESTOS_INTERNOS}
-
 ==================================================
-DESCUENTOS AGRUPADOS — OBLIGATORIO
+${REGLAS_LINEAS}
 ==================================================
-${DICCIONARIO_DESCUENTOS}
-
-IMPORTANTE: no leas la factura solamente como texto lineal. Es una tabla.
-Reconstruí la relación visual entre encabezado, columna y fila.
-Si el encabezado dice "I. INTERNOS", el número alineado debajo de ese encabezado pertenece al campo impuestos_internos.
-Esto debe hacerse aunque el OCR escriba el encabezado como I.I, IMP INT, IMP. INTERNOS, etc.
-
+${COLUMNAS}
 ==================================================
 DATOS GENERALES Y TOTALES OFICIALES
 ==================================================
-
-Identificá proveedor, número, fechas y los importes del PIE/RESUMEN:
+Identificá proveedor, número, fechas y los importes del pie/resumen:
 - subtotal bruto
 - descuento total
 - subtotal neto
@@ -91,63 +93,58 @@ Identificá proveedor, número, fechas y los importes del PIE/RESUMEN:
 - otros cargos
 - total final
 
-Los importes del PIE/RESUMEN son la fuente de verdad.
-Si el pie muestra impuestos internos, cargalos en el campo impuestos_internos_total.
-Si muestra percepciones u otros cargos que forman parte del total, cargalos en cargos.
-
-Si existe una columna de impuestos internos, extraé TAMBIÉN el importe de cada fila en el campo impuestos_internos.
-El total de impuestos internos debe ser consistente con la suma de esas líneas, salvo redondeos.
-
-No inventes información. Si una columna de impuestos internos no existe en el documento, usá 0 en las líneas y null para el total si tampoco aparece en el pie.
-Todos los importes deben ser números.
+Los importes del pie/resumen son la fuente de verdad para validar el comprobante.
+No inventes información. Si un dato no aparece, devolvé null.
 
 ==================================================
-INTERPRETACIÓN DE SIGNOS
+IMPORTES DE CADA LÍNEA
 ==================================================
+Para cada línea identificá, cuando existan:
+descripción, código del proveedor, cantidad, precio unitario, precio bruto unitario,
+descuentos, bonificaciones, precio neto, IVA, importe de IVA, impuestos internos,
+cargos propios de la línea y subtotal/importe final.
 
-NO interpretes un guion "-" como signo negativo solamente porque aparece cerca de un número.
-Un importe es negativo solamente cuando el documento muestra evidencia clara de que representa una reducción/ajuste.
-Nunca conviertas un importe negativo en positivo por tu cuenta.
-
-Para CADA fila comercial visible indicá tipo_linea: producto, descuento_linea, descuento_agrupado o ajuste.
-NO OMITAS filas de descuento, bonificación o ajuste aunque no tengan código de producto.
-es_ajuste_negativo es true solamente cuando el documento confirme que la línea es un ajuste negativo.
-
-==================================================
-PRODUCTOS, DESCUENTOS, IVA E IMPUESTOS
-==================================================
-
-Para cada línea identificá:
-descripcion, codigo_proveedor, cantidad, precio_unitario, precio_bruto_unitario,
-descuento, porcentaje_descuento, descuentos, grupo_descuento, bonificacion,
-tipo_bonificacion, cantidad_bonificada_detalle, precio_neto, precio_neto_unitario,
-precio_final, subtotal_neto, iva, iva_importe, impuestos_internos.
+Si la factura imprime un importe/subtotal neto de la línea, ese importe tiene prioridad sobre cualquier cálculo que puedas reconstruir.
+Si imprime precio neto unitario, usalo para validar.
+No vuelvas a aplicar un descuento que ya esté incorporado en el importe neto impreso.
 
 Para una línea de descuento agrupado:
-- tipo_linea debe ser descuento_agrupado;
-- es_ajuste_negativo debe ser false;
-- no requiere producto_id;
-- porcentaje_descuento debe contener el porcentaje si aparece en la línea;
-- aplica_a_descripciones debe contener los productos/presentaciones afectados;
-- conservá la descripción original completa.
+- tipo_linea = descuento_agrupado
+- no requiere producto
+- es_ajuste_negativo = true si la línea representa una reducción monetaria
+- conservá el importe negativo cuando esté impreso
+- NO asocies esa línea a un producto específico
+- aplica_a_descripciones puede quedar vacío si la relación no es inequívoca
 
-iva es la alícuota en porcentaje.
-iva_importe es el importe de IVA de la línea.
-impuestos_internos es EXCLUSIVAMENTE el importe de la columna de impuestos internos.
+Para una línea de descuento individual:
+- tipo_linea = descuento_linea
+- si la línea representa una reducción monetaria, es_ajuste_negativo = true
+- no requiere producto cuando es una línea independiente
 
-Para una línea negativa confirmada, conservá los signos negativos de precio/subtotal/IVA cuando correspondan.
-Para una línea normal, precio_unitario debe ser positivo salvo indicación expresa del documento.
+Para una línea normal de producto:
+- tipo_linea = producto
+- es_ajuste_negativo = false
+
+Para cargos de una línea:
+- guardalos en cargos como conceptos positivos
+- no los confundas con impuestos ni descuentos
+
+==================================================
+SIGNOS
+==================================================
+No interpretes un guion aislado como signo negativo.
+Usá signo negativo únicamente cuando la factura indique que el importe es una reducción/ajuste.
+No conviertas descuentos o bonificaciones en positivos si la factura los muestra como negativos.
 
 ==================================================
 VALIDACIÓN
 ==================================================
-
 Comprobá cuando sea posible:
-subtotal neto + IVA + impuestos internos + cargos = total final
+subtotal neto + IVA + impuestos internos + cargos/percepciones = total final.
 
-Comprobá también que el descuento_total del pie sea compatible con la suma de descuentos/bonificaciones identificados.
+Comprobá también que el descuento total del pie sea compatible con los descuentos/bonificaciones identificados.
 
-No fuerces las líneas para hacer coincidir el total. Conservá los importes oficiales del pie.
+NO fuerces las líneas para hacer coincidir el total. Si existe una diferencia, conservá los importes leídos y dejá que el sistema muestre la advertencia.
 `
 
   const contenido = mimeType === "application/pdf"
