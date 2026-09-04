@@ -1,5 +1,7 @@
 export type TipoLineaIA = "producto" | "descuento_linea" | "descuento_agrupado" | "ajuste"
 
+export type CargoExtraido = { descripcion: string; importe: number }
+
 export type LineaExtraida = {
   descripcion: string
   cantidad: number
@@ -25,16 +27,16 @@ export type LineaExtraida = {
   precio_final?: number | null
   iva_importe?: number | null
   impuestos_internos?: number | null
+  cargos?: CargoExtraido[]
   grupo_descuento?: string | null
   aplica_a_descripciones?: string[]
+  columnas_presentes?: string[]
   producto_id?: string
   score?: number
   confianza?: "alta" | "media" | "baja"
   motivo?: string
   fuente?: "alias" | "smartmatch" | "manual"
 }
-
-export type CargoExtraido = { descripcion: string; importe: number }
 
 export type ComprobanteExtraido = {
   proveedor_nombre: string | null
