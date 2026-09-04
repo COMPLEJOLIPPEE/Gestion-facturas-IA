@@ -26,6 +26,7 @@ type ItemInput = {
   cantidad_bonificada_detalle?: number | null
   impuestos_internos?: number | null
   cargos?: CargoInput[]
+  columnas_presentes?: string[]
   tipo_linea?: "producto" | "ajuste"
   es_ajuste_negativo?: boolean
   descripcionLeida?: string | null
@@ -142,6 +143,8 @@ export async function crearFactura(formData: FormData) {
       descuentos_detalle: descuentosDetalle.length ? descuentosDetalle : null,
       bonificacion_tipo: item.tipo_bonificacion ?? null,
       cantidad_bonificada: numero(item.cantidad_bonificada ?? item.cantidad_bonificada_detalle) || null,
+      cargos_detalle: item.cargos?.length ? item.cargos : null,
+      columnas_presentes: item.columnas_presentes?.length ? item.columnas_presentes : null,
     }
   })
 
