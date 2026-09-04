@@ -12,6 +12,11 @@ const cargoSchema = {
   },
 }
 
+const columnasSchema = {
+  type: Type.ARRAY,
+  items: { type: Type.STRING },
+}
+
 export const schema = {
   type: Type.OBJECT,
   properties: {
@@ -69,6 +74,8 @@ export const schema = {
           bonificacion_importe: { type: Type.NUMBER, nullable: true },
           bonificacion_tipo: { type: Type.STRING, nullable: true },
           tipo_bonificacion: { type: Type.STRING, nullable: true },
+          cargos: cargoSchema,
+          columnas_presentes: columnasSchema,
         },
         required: [
           "descripcion",
@@ -78,6 +85,8 @@ export const schema = {
           "tipo_linea",
           "es_ajuste_negativo",
           "aplica_a_descripciones",
+          "cargos",
+          "columnas_presentes",
         ],
       },
     },
