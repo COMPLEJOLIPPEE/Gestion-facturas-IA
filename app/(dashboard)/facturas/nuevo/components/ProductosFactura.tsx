@@ -4,7 +4,8 @@ type Producto = { id: string; nombre: string; codigo: string | null; marca?: str
 type CargoLinea = { descripcion: string; importe: number }
 export type LineaFactura = {
   producto_id: string; cantidad: number; precio_unitario: number; iva: number; descuento: number; precio_final: number
-  bonificacion?: number; cantidad_bonificada?: number; cantidad_bonificada_detalle?: number; tipo_bonificacion?: "cantidad" | "importe" | "porcentaje"
+  descuento_porcentaje?: number; tipo_descuento?: "porcentaje" | "importe"
+  bonificacion?: number; bonificacion_porcentaje?: number; cantidad_bonificada?: number; cantidad_bonificada_detalle?: number; tipo_bonificacion?: "cantidad" | "importe" | "porcentaje"
   precio_bruto_unitario?: number; precio_neto?: number; subtotal_neto?: number; impuestos_internos?: number; iva_importe?: number
   cargos?: CargoLinea[]; columnas_presentes?: string[]
   codigo_proveedor?: string; descripcion_proveedor?: string; descripcionLeida?: string; autoMatcheado?: boolean; score?: number
@@ -24,13 +25,14 @@ const ETIQUETAS: Record<string, string> = {
   precio_neto_unitario: "P. Neto", iva: "IVA %", iva_importe: "IVA $", impuestos_internos: "Imp. Int.", cargo: "Cargo", subtotal_neto: "Subtotal", importe: "Importe"
 }
 function dinero(valor: number) { return valor.toLocaleString("es-AR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }) }
+function porcentaje(valor: number) { return `${valor.toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}%` }
 function numero(valor: unknown) { const n = Number(valor ?? 0); return Number.isFinite(n) ? n : 0 }
 
 function columnasFallback(lineas: LineaFactura[]) {
   const columnas = new Set<string>(["descripcion", "cantidad", "precio_unitario"])
   for (const l of lineas) {
-    if (numero(l.descuento) !== 0) columnas.add("descuento")
-    if (numero(l.bonificacion) !== 0 || numero(l.cantidad_bonificada) !== 0) columnas.add("bonificacion")
+    if (numero(l.descuento) !== 0 || l.descuento_porcentaje != null) columnas.add("descuento")
+    if (numero(l.bonificacion) !== 0 || l.bonificacion_porcentaje != null || numero(l.cantidad_bonificada) !== 0) columnas.add("bonificacion")
     if (l.precio_neto != null) columnas.add("precio_neto_unitario")
     if (l.iva != null) columnas.add("iva")
     if (numero(l.iva_importe) !== 0) columnas.add("iva_importe")
@@ -79,13 +81,18 @@ export default function ProductosFactura({ productos, lineas, agregarLinea, quit
           const cantidad = numero(linea.cantidad)
           const precio = numero(linea.precio_bruto_unitario ?? linea.precio_unitario)
           const descuento = Math.abs(numero(linea.descuento))
-          const bonificacion = Math.abs(numero(linea.bonificacion)) + (linea.tipo_bonificacion === "cantidad" ? numero(linea.cantidad_bonificada) * Math.abs(precio) : 0)
-          const subtotal = linea.subtotal_neto != null ? numero(linea.subtotal_neto) : ajuste ? -Math.abs(cantidad * precio) : Math.max(0, cantidad * Math.abs(precio) - descuento - bonificacion)
+          const bonificacion = Math.abs(numero(linea.bonificacion))
+          const bonificacionCantidad = linea.tipo_bonificacion === "cantidad" ? numero(linea.cantidad_bonificada) * Math.abs(precio) : 0
+          const subtotal = linea.subtotal_neto != null ? numero(linea.subtotal_neto) : ajuste ? -Math.abs(cantidad * precio) : Math.max(0, cantidad * Math.abs(precio) - descuento - bonificacion - bonificacionCantidad)
           const precioNeto = linea.precio_neto != null ? numero(linea.precio_neto) : cantidad ? subtotal / cantidad : precio
-          const iva = numero(linea.iva_importe) || subtotal * numero(linea.iva) / 100
+          const iva = linea.iva_importe != null ? numero(linea.iva_importe) : subtotal * numero(linea.iva) / 100
           const internos = numero(linea.impuestos_internos)
           const cargos = (linea.cargos ?? []).reduce((s, c) => s + numero(c.importe), 0)
           const importe = linea.subtotal_neto != null ? subtotal + iva + internos : subtotal + iva + internos + cargos
+          const descuentoEsPorcentaje = linea.descuento_porcentaje != null || linea.tipo_descuento === "porcentaje"
+          const bonificacionEsPorcentaje = linea.bonificacion_porcentaje != null || linea.tipo_bonificacion === "porcentaje"
+          const descuentoVisual = descuentoEsPorcentaje ? porcentaje(linea.descuento_porcentaje ?? descuento) : `$${dinero(descuento)}`
+          const bonificacionVisual = bonificacionEsPorcentaje ? porcentaje(linea.bonificacion_porcentaje ?? bonificacion) : `$${dinero(bonificacion + bonificacionCantidad)}`
           const celda = (col: string) => {
             if (col === "descripcion") return <div className="min-w-[260px] text-left">
               {ajuste ? <div className="rounded-lg border border-red-200 bg-red-50 p-3"><span className="rounded-full bg-red-600 px-2 py-1 text-[10px] font-bold text-white">DESCUENTO / AJUSTE</span><p className="mt-2 font-semibold text-red-900">{linea.descripcionLeida || "Descuento del comprobante"}</p><p className="mt-1 text-xs text-red-700">Línea independiente · no se asocia a ningún producto.</p></div> : <>
@@ -99,8 +106,8 @@ export default function ProductosFactura({ productos, lineas, agregarLinea, quit
             </div>
             if (col === "cantidad") return <input type="number" min="0" step="0.01" value={linea.cantidad} onChange={(e) => actualizarLinea(index, "cantidad", Number(e.target.value))} className="w-20 rounded border p-2 text-right" />
             if (col === "precio_unitario") return <input type="number" step="0.01" value={linea.precio_unitario} onChange={(e) => actualizarLinea(index, "precio_unitario", Number(e.target.value))} className="w-28 rounded border p-2 text-right" />
-            if (col === "descuento") return <span className="block text-right">${dinero(descuento)}</span>
-            if (col === "bonificacion") return <span className="block text-right">${dinero(bonificacion)}</span>
+            if (col === "descuento") return <span className="block text-right">{descuentoVisual}</span>
+            if (col === "bonificacion") return <span className="block text-right">{bonificacionVisual}</span>
             if (col === "precio_neto_unitario") return <span className="block text-right font-medium">${dinero(precioNeto)}</span>
             if (col === "iva") return <select value={linea.iva} onChange={(e) => actualizarLinea(index, "iva", Number(e.target.value))} className="w-20 rounded border p-2"><option value={21}>21%</option><option value={10.5}>10,5%</option><option value={27}>27%</option><option value={5}>5%</option><option value={2.5}>2,5%</option><option value={0}>0%</option></select>
             if (col === "iva_importe") return <span className="block text-right">${dinero(iva)}</span>
