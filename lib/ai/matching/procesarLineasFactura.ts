@@ -97,10 +97,14 @@ function crearLineaDescuento(linea: LineaExtraida): LineaProcesada {
     Math.abs(numero(linea.bonificacion_importe ?? linea.bonificacion)),
     Math.abs(numero(linea.precio_unitario * Math.max(1, numero(linea.cantidad ?? 1))))
   )
-  const ivaImporte = Math.abs(numero(linea.iva_importe))
+  const iva = numero(linea.iva ?? 0)
+  const ivaImporte = linea.iva_importe != null && numero(linea.iva_importe) !== 0
+    ? -Math.abs(numero(linea.iva_importe))
+    : redondear(-importeExplicito * iva / 100)
+
   return {
-    producto_id: "", cantidad: 1, precio_unitario: redondear(-importeExplicito), iva: numero(linea.iva ?? 0), descuento: 0, precio_final: redondear(-importeExplicito),
-    precio_bruto_unitario: redondear(-importeExplicito), precio_neto: redondear(-importeExplicito), subtotal_neto: redondear(-importeExplicito), iva_importe: ivaImporte ? redondear(-ivaImporte) : 0,
+    producto_id: "", cantidad: 1, precio_unitario: redondear(-importeExplicito), iva, descuento: 0, precio_final: redondear(-importeExplicito),
+    precio_bruto_unitario: redondear(-importeExplicito), precio_neto: redondear(-importeExplicito), subtotal_neto: redondear(-importeExplicito), iva_importe: ivaImporte,
     impuestos_internos: 0, cargos: [], columnas_presentes: linea.columnas_presentes ?? [], descripcionLeida: linea.descripcion, autoMatcheado: false, score: 100,
     confianza: "alta", motivo: "Descuento/bonificación conservado como línea independiente. No se asocia ni se reparte entre productos.", fuente: "manual", codigo_proveedor: linea.codigo_proveedor ?? undefined, tipo_linea: "ajuste", es_ajuste_negativo: true,
   }
