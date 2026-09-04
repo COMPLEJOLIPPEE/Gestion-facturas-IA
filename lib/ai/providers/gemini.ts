@@ -55,6 +55,25 @@ ESTRUCTURA VISUAL DE LA TABLA:
 - No agregues columnas solamente porque el modelo conozca ese dato.
 `
 
+const REGLAS_IVA = `
+IVA: REGLA CRÍTICA
+- Buscá primero el cuadro/resumen fiscal del comprobante donde normalmente aparecen "IVA 21%", "IVA 10,5%", "IVA 27%", "IVA 5%", "IVA 2,5%" o "IVA 0%".
+- Si allí aparece un importe distinto de 0 para una alícuota, esa alícuota es la fuente de verdad. NO asumas 21% por defecto.
+- Si la tabla de productos NO tiene columna IVA pero el pie fiscal informa una sola alícuota no nula para las líneas gravadas, asigná esa alícuota a las líneas gravadas aunque no la agregues a columnas_presentes.
+- Si el pie informa IVA 10,5%, jamás devuelvas 21% por asumir que el proveedor es Responsable Inscripto.
+- iva_importe debe ser el importe de IVA correspondiente a esa alícuota, no el total con IVA de la línea.
+- No confundas "Percepción IVA" con "IVA".
+`
+
+const REGLAS_DESCUENTOS = `
+DESCUENTOS:
+- Leé literalmente las columnas DTO., Dto., Descuento, Bonif. y equivalentes.
+- Si hay un porcentaje de descuento en una fila, guardalo en porcentaje_descuento y calculá su importe sobre la base correcta.
+- Si hay varios descuentos sucesivos en una misma fila, guardalos en descuentos[] y aplicalos en secuencia; NO los sumes como porcentajes simples.
+- Si el comprobante imprime un importe neto unitario o subtotal neto, ese valor tiene prioridad para comprobar el resultado y no debe volver a descontarse.
+- Si el descuento aparece como línea separada y afecta a varios productos, conservá la línea independiente; no la asocies a un producto.
+`
+
 export async function extraerConGemini(base64: string, mimeType: string, tipo: TipoComprobanteIA): Promise<ComprobanteExtraido> {
   const apiKey = process.env.GEMINI_API_KEY
   if (!apiKey) throw new Error("Falta la variable de entorno GEMINI_API_KEY")
@@ -81,6 +100,10 @@ ${REGLAS_LINEAS}
 ==================================================
 ${COLUMNAS}
 ==================================================
+${REGLAS_IVA}
+==================================================
+${REGLAS_DESCUENTOS}
+==================================================
 DATOS GENERALES Y TOTALES OFICIALES
 ==================================================
 Identificá proveedor, número, fechas y los importes del pie/resumen:
@@ -93,6 +116,8 @@ Identificá proveedor, número, fechas y los importes del pie/resumen:
 - otros cargos
 - total final
 
+MUY IMPORTANTE: para IVA, tomá como fuente de verdad el desglose fiscal por alícuota del pie si está presente. No reconstruyas el IVA únicamente como total menos subtotal.
+
 Los importes del pie/resumen son la fuente de verdad para validar el comprobante.
 No inventes información. Si un dato no aparece, devolvé null.
 
@@ -104,9 +129,9 @@ descripción, código del proveedor, cantidad, precio unitario, precio bruto uni
 descuentos, bonificaciones, precio neto, IVA, importe de IVA, impuestos internos,
 cargos propios de la línea y subtotal/importe final.
 
-Si la factura imprime un importe/subtotal neto de la línea, ese importe tiene prioridad sobre cualquier cálculo que puedas reconstruir.
-Si imprime precio neto unitario, usalo para validar.
-No vuelvas a aplicar un descuento que ya esté incorporado en el importe neto impreso.
+Si la factura imprime un subtotal neto de línea, usalo como subtotal_neto.
+Si imprime precio neto unitario pero no subtotal neto, calculá subtotal_neto = precio_neto_unitario × cantidad.
+Si imprime "IMPORTE" o "TOTAL" de línea que incluye IVA, NO lo guardes como subtotal_neto; usalo solo para validar contra precio neto + IVA + impuestos internos.
 
 Para una línea de descuento agrupado:
 - tipo_linea = descuento_agrupado
@@ -114,7 +139,6 @@ Para una línea de descuento agrupado:
 - es_ajuste_negativo = true si la línea representa una reducción monetaria
 - conservá el importe negativo cuando esté impreso
 - NO asocies esa línea a un producto específico
-- aplica_a_descripciones puede quedar vacío si la relación no es inequívoca
 
 Para una línea de descuento individual:
 - tipo_linea = descuento_linea
