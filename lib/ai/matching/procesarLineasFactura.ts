@@ -51,8 +51,6 @@ function financieros(linea: LineaExtraida, negativo: boolean) {
     precio_bruto_unitario: redondear(precioInterno), precio_neto: redondear(subtotalObjetivo / cantidad), subtotal_neto: redondear(subtotalObjetivo), iva_importe: redondear(ivaImporte),
     impuestos_internos: Math.abs(numero(linea.impuestos_internos)), descuento: redondear(descuentoNormalizado), bonificacion: redondear(bonificacionNormalizada),
     cantidad_bonificada: numero(linea.cantidad_bonificada) || undefined, cantidad_bonificada_detalle: numero(linea.cantidad_bonificada_detalle) || undefined,
-    // Se conserva la cantidad bonificada como dato informativo, pero el importe ya queda normalizado
-    // en bonificacion para que el formulario no lo descuente dos veces.
     tipo_bonificacion: bonificacionEsCantidad ? "importe" as const : (linea.tipo_bonificacion ?? linea.bonificacion_tipo) as TipoBonificacionProcesada | undefined,
   }
 }
@@ -78,8 +76,7 @@ export async function procesarLineasFacturaIA(supabase: SupabaseClient, proveedo
     const financierosLinea = financieros(linea, negativo)
     const base = {
       cantidad: Math.max(0, numero(linea.cantidad)), precio_unitario: negativo ? -Math.abs(numero(linea.precio_unitario)) : Math.abs(numero(linea.precio_unitario)), iva: numero(linea.iva ?? 21),
-      descuento: financierosLinea.descuento, bonificacion: financierosLinea.bonificacion, cantidad_bonificada: financierosLinea.cantidad_bonificada, cantidad_bonificada_detalle: financierosLinea.cantidad_bonificada_detalle,
-      tipo_bonificacion: financierosLinea.tipo_bonificacion, precio_final: financierosLinea.precio_neto, ...financierosLinea, cargos: linea.cargos ?? [], columnas_presentes: linea.columnas_presentes ?? [], descripcionLeida: linea.descripcion,
+      precio_final: financierosLinea.precio_neto, ...financierosLinea, cargos: linea.cargos ?? [], columnas_presentes: linea.columnas_presentes ?? [], descripcionLeida: linea.descripcion,
       codigo_proveedor: linea.codigo_proveedor ?? undefined, tipo_linea: negativo ? "ajuste" as const : "producto" as const, es_ajuste_negativo: negativo,
     }
 
