@@ -22,6 +22,8 @@ export type LineaProcesada = {
   subtotal_neto?: number
   iva_importe?: number
   impuestos_internos?: number
+  cargos?: { descripcion: string; importe: number }[]
+  columnas_presentes?: string[]
   codigo_proveedor?: string
   descripcionLeida: string
   autoMatcheado: boolean
@@ -44,54 +46,17 @@ function redondear(valor: number) {
   return Number(valor.toFixed(2))
 }
 
-function normalizarTexto(valor: string) {
-  return valor.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim()
-}
-
-function normalizarConcepto(valor: string) {
-  return normalizarTexto(valor)
-    .replace(/\bpwd\b/g, "powerade")
-    .replace(/\bpow\b/g, "powerade")
-    .replace(/\bpower\b/g, "powerade")
-    .replace(/\b1\s*[.,]?\s*5\s*l\b/g, "1500")
-    .replace(/\b1\s*[.,]\s*500\b/g, "1500")
-    .replace(/\b1500\s*ml\b/g, "1500")
-    .replace(/\b500\s*ml\b/g, "500")
-    .replace(/\b(\d+)\s*x\s*(\d+)\b/g, "$1 $2")
-    .replace(/\b(caj|caja|cajas|unidad|unid|u|pdv)\b/g, " ")
-    .replace(/\s+/g, " ")
-    .trim()
-}
-
-function objetivosDescuento(linea: LineaExtraida) {
-  if (linea.aplica_a_descripciones?.length) return linea.aplica_a_descripciones.map(normalizarConcepto).filter(Boolean)
-  const texto = normalizarTexto(linea.descripcion)
-  if (/power|pwd|pow/.test(texto) && /500/.test(texto)) return ["powerade 500"]
-  if (/power|pwd|pow/.test(texto) && /(1500|1 500|1 5 l)/.test(texto)) return ["powerade 1500"]
-  if (/lata/.test(texto) && /354/.test(texto)) return ["lata 354"]
-  return []
-}
-
-function coincideObjetivo(descripcionProducto: string, objetivo: string) {
-  const producto = normalizarConcepto(descripcionProducto)
-  const target = normalizarConcepto(objetivo)
-  if (!producto || !target) return false
-  if (producto.includes(target) || target.includes(producto)) return true
-  const tokensTarget = target.split(" ").filter((t) => t.length >= 2)
-  const tokensProducto = new Set(producto.split(" ").filter((t) => t.length >= 2))
-  return tokensTarget.length > 0 && tokensTarget.every((t) => tokensProducto.has(t))
-}
-
-function financieros(linea: LineaExtraida, negativo: boolean, descuentoForzado?: number) {
+function financieros(linea: LineaExtraida, negativo: boolean) {
   const cantidad = Math.max(1, numero(linea.cantidad ?? 1))
   const brutoUnitarioOriginal = numero(linea.precio_bruto_unitario ?? linea.precio_unitario)
   const brutoUnitario = negativo ? -Math.abs(brutoUnitarioOriginal) : Math.abs(brutoUnitarioOriginal)
   const subtotalOriginal = numero(linea.subtotal_neto)
+  const descuentoImporte = Math.abs(numero(linea.descuento))
+  const bonificacionImporte = Math.abs(numero(linea.bonificacion_importe ?? linea.bonificacion))
+  const importeAlternativo = descuentoImporte || bonificacionImporte || Math.abs(cantidad * brutoUnitario)
   const subtotal = negativo
-    ? (subtotalOriginal !== 0 ? -Math.abs(subtotalOriginal) : redondear(cantidad * brutoUnitario))
-    : descuentoForzado != null
-      ? redondear(Math.max(0, cantidad * Math.abs(brutoUnitario) - descuentoForzado))
-      : (subtotalOriginal !== 0 ? Math.abs(subtotalOriginal) : redondear(cantidad * Math.abs(brutoUnitario)))
+    ? (subtotalOriginal !== 0 ? -Math.abs(subtotalOriginal) : -Math.abs(importeAlternativo))
+    : (subtotalOriginal !== 0 ? Math.abs(subtotalOriginal) : redondear(cantidad * Math.abs(brutoUnitario) - descuentoImporte - bonificacionImporte))
   const iva = numero(linea.iva ?? 21)
   const ivaImporte = linea.iva_importe != null && numero(linea.iva_importe) !== 0
     ? (negativo ? -Math.abs(numero(linea.iva_importe)) : Math.abs(numero(linea.iva_importe)))
@@ -111,27 +76,36 @@ function financieros(linea: LineaExtraida, negativo: boolean, descuentoForzado?:
 }
 
 function crearLineaDescuento(linea: LineaExtraida): LineaProcesada {
-  const financierosLinea = financieros(linea, true)
-  const importe = Math.abs(financierosLinea.subtotal_neto ?? 0)
-  const cantidad = 1
-  const precio = -importe
+  const importeExplicito = Math.max(
+    Math.abs(numero(linea.subtotal_neto)),
+    Math.abs(numero(linea.descuento)),
+    Math.abs(numero(linea.bonificacion_importe ?? linea.bonificacion)),
+    Math.abs(numero(linea.precio_unitario * Math.max(1, numero(linea.cantidad ?? 1))))
+  )
+  const ivaImporte = Math.abs(numero(linea.iva_importe))
   return {
     producto_id: "",
-    cantidad,
-    precio_unitario: redondear(precio),
-    iva: numero(linea.iva ?? 21),
+    cantidad: 1,
+    precio_unitario: redondear(-importeExplicito),
+    iva: numero(linea.iva ?? 0),
     descuento: 0,
-    precio_final: redondear(financierosLinea.precio_neto ?? precio),
-    ...financierosLinea,
+    precio_final: redondear(-importeExplicito),
+    precio_bruto_unitario: redondear(-importeExplicito),
+    precio_neto: redondear(-importeExplicito),
+    subtotal_neto: redondear(-importeExplicito),
+    iva_importe: ivaImporte ? redondear(-ivaImporte) : 0,
+    impuestos_internos: 0,
+    cargos: [],
+    columnas_presentes: linea.columnas_presentes ?? [],
     descripcionLeida: linea.descripcion,
     autoMatcheado: false,
     score: 100,
     confianza: "alta",
-    motivo: "Descuento del comprobante conservado como línea independiente. No se aplica al precio del producto.",
+    motivo: "Descuento/bonificación del comprobante conservado como línea independiente. No se asocia ni se reparte entre productos.",
     fuente: "manual",
+    codigo_proveedor: linea.codigo_proveedor ?? undefined,
     tipo_linea: "ajuste",
     es_ajuste_negativo: true,
-    codigo_proveedor: linea.codigo_proveedor ?? undefined,
   }
 }
 
@@ -156,6 +130,8 @@ export async function procesarLineasFacturaIA(
       descuento: negativo ? 0 : Math.abs(numero(linea.descuento)),
       precio_final: financierosLinea.precio_neto ?? precioUnitario,
       ...financierosLinea,
+      cargos: linea.cargos ?? [],
+      columnas_presentes: linea.columnas_presentes ?? [],
       descripcionLeida: linea.descripcion,
       codigo_proveedor: linea.codigo_proveedor ?? undefined,
       tipo_linea: negativo ? "ajuste" as const : "producto" as const,
@@ -183,17 +159,9 @@ export async function procesarLineasFacturaIA(
     }
   }
 
-  // Los descuentos agrupados se conservan como líneas independientes.
-  // Solamente se agrega una nota informativa a los productos afectados;
-  // nunca se modifica su precio, descuento o subtotal por este concepto.
-  for (const descuento of descuentos) {
-    const objetivos = objetivosDescuento(descuento)
-    for (const linea of resultado) {
-      if (linea.tipo_linea !== "producto" || !objetivos.some((objetivo) => coincideObjetivo(linea.descripcionLeida, objetivo))) continue
-      linea.motivo = `${linea.motivo} Nota: este producto participa en el descuento "${descuento.descripcion}". El descuento se conserva como línea independiente y no modifica el precio del producto.`
-    }
-    resultado.push(crearLineaDescuento(descuento))
-  }
+  // Los descuentos/bonificaciones generales quedan siempre como líneas independientes.
+  // No se intenta averiguar qué producto o categoría los origina.
+  for (const descuento of descuentos) resultado.push(crearLineaDescuento(descuento))
 
   return resultado
 }
