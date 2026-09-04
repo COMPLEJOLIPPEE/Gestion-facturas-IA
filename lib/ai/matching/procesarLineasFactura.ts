@@ -17,7 +17,6 @@ export type LineaProcesada = {
 
 function numero(valor: unknown) { const n = Number(valor ?? 0); return Number.isFinite(n) ? n : 0 }
 function redondear(valor: number) { return Number(valor.toFixed(2)) }
-
 function cargosTotal(linea: LineaExtraida) { return (linea.cargos ?? []).reduce((s, c) => s + Math.abs(numero(c.importe)), 0) }
 
 function financieros(linea: LineaExtraida, negativo: boolean) {
@@ -27,8 +26,8 @@ function financieros(linea: LineaExtraida, negativo: boolean) {
   const cargo = cargosTotal(linea)
   const subtotalOriginal = numero(linea.subtotal_neto)
   const descuentoInformado = Math.abs(numero(linea.descuento))
-  const bonificacionInformada = Math.abs(numero(linea.bonificacion_importe ?? linea.bonificacion))
   const bonificacionCantidad = linea.tipo_bonificacion === "cantidad" ? Math.min(Math.max(0, numero(linea.cantidad_bonificada ?? linea.cantidad_bonificada_detalle)), cantidad) * precioOriginal : 0
+  const bonificacionInformada = Math.abs(numero(linea.bonificacion_importe ?? linea.bonificacion))
   const bonificacionTotal = bonificacionInformada || bonificacionCantidad
 
   if (negativo) {
@@ -38,8 +37,6 @@ function financieros(linea: LineaExtraida, negativo: boolean) {
     return { precio_bruto_unitario: redondear(importe), precio_neto: redondear(importe), subtotal_neto: redondear(importe), iva_importe: redondear(ivaImporte), impuestos_internos: -Math.abs(numero(linea.impuestos_internos)), descuento: 0, bonificacion: 0, cantidad_bonificada: undefined, cantidad_bonificada_detalle: undefined, tipo_bonificacion: undefined as TipoBonificacionProcesada | undefined }
   }
 
-  // Si el importe de línea incluye cargos propios, incorporamos esos cargos al bruto interno
-  // para que el cálculo general conserve el mismo resultado sin alterar el precio mostrado.
   const brutoConCargo = brutoOriginal + cargo
   const subtotalObjetivo = subtotalOriginal !== 0 ? Math.abs(subtotalOriginal) : Math.max(0, brutoConCargo - descuentoInformado - bonificacionTotal)
   const reduccionTotal = Math.max(0, brutoConCargo - subtotalObjetivo)
@@ -48,18 +45,15 @@ function financieros(linea: LineaExtraida, negativo: boolean) {
   const precioInterno = cargo > 0 ? brutoConCargo / cantidad : precioOriginal
   const iva = numero(linea.iva ?? 21)
   const ivaImporte = linea.iva_importe != null && numero(linea.iva_importe) !== 0 ? Math.abs(numero(linea.iva_importe)) : redondear(subtotalObjetivo * iva / 100)
+  const bonificacionEsCantidad = linea.tipo_bonificacion === "cantidad"
 
   return {
-    precio_bruto_unitario: redondear(precioInterno),
-    precio_neto: redondear(subtotalObjetivo / cantidad),
-    subtotal_neto: redondear(subtotalObjetivo),
-    iva_importe: redondear(ivaImporte),
-    impuestos_internos: Math.abs(numero(linea.impuestos_internos)),
-    descuento: redondear(descuentoNormalizado),
-    bonificacion: redondear(bonificacionNormalizada),
-    cantidad_bonificada: numero(linea.cantidad_bonificada) || undefined,
-    cantidad_bonificada_detalle: numero(linea.cantidad_bonificada_detalle) || undefined,
-    tipo_bonificacion: (linea.tipo_bonificacion ?? linea.bonificacion_tipo) as TipoBonificacionProcesada | undefined,
+    precio_bruto_unitario: redondear(precioInterno), precio_neto: redondear(subtotalObjetivo / cantidad), subtotal_neto: redondear(subtotalObjetivo), iva_importe: redondear(ivaImporte),
+    impuestos_internos: Math.abs(numero(linea.impuestos_internos)), descuento: redondear(descuentoNormalizado), bonificacion: redondear(bonificacionNormalizada),
+    cantidad_bonificada: numero(linea.cantidad_bonificada) || undefined, cantidad_bonificada_detalle: numero(linea.cantidad_bonificada_detalle) || undefined,
+    // Se conserva la cantidad bonificada como dato informativo, pero el importe ya queda normalizado
+    // en bonificacion para que el formulario no lo descuente dos veces.
+    tipo_bonificacion: bonificacionEsCantidad ? "importe" as const : (linea.tipo_bonificacion ?? linea.bonificacion_tipo) as TipoBonificacionProcesada | undefined,
   }
 }
 
@@ -90,7 +84,6 @@ export async function procesarLineasFacturaIA(supabase: SupabaseClient, proveedo
     }
 
     if (negativo) { resultado.push({ ...base, producto_id: "", autoMatcheado: false, score: 100, confianza: "alta", motivo: "Línea identificada como ajuste negativo; no requiere producto.", fuente: "manual" }); continue }
-
     const alias = proveedorId ? await buscarAlias(supabase, proveedorId, linea.descripcion, linea.codigo_proveedor) : null
     if (alias) { resultado.push({ ...base, producto_id: alias.producto_id, autoMatcheado: true, score: 100, confianza: "alta", motivo: "Producto reconocido mediante historial del proveedor.", fuente: "alias" }); continue }
     const match = smartMatch(linea.descripcion, productos)
