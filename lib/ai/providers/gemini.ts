@@ -66,12 +66,18 @@ IVA: REGLA CRÍTICA
 `
 
 const REGLAS_DESCUENTOS = `
-DESCUENTOS:
+DESCUENTOS Y BONIFICACIONES: UNIDAD OBLIGATORIA
 - Leé literalmente las columnas DTO., Dto., Descuento, Bonif. y equivalentes.
-- Si hay un porcentaje de descuento en una fila, guardalo en porcentaje_descuento y calculá su importe sobre la base correcta.
-- Si hay varios descuentos sucesivos en una misma fila, guardalos en descuentos[] y aplicalos en secuencia; NO los sumes como porcentajes simples.
-- Si el comprobante imprime un importe neto unitario o subtotal neto, ese valor tiene prioridad para comprobar el resultado y no debe volver a descontarse.
-- Si el descuento aparece como línea separada y afecta a varios productos, conservá la línea independiente; no la asocies a un producto.
+- Cada valor de descuento/bonificación debe tener una interpretación: porcentaje, importe monetario o cantidad bonificada.
+- Si el comprobante muestra el símbolo %, escribí porcentaje_descuento o bonificacion_tipo=porcentaje y guardá el porcentaje sin el símbolo.
+- Si el símbolo % NO está impreso pero la columna representa porcentajes (por ejemplo BONIF. con valores 50, 25, 20) y el cálculo con ese porcentaje explica el importe neto/total de la fila, tratá el valor como porcentaje. NO lo conviertas en $50/$20.
+- Para decidir entre porcentaje e importe, priorizá el encabezado de la columna y la consistencia matemática con precio unitario, cantidad, precio neto y total de línea.
+- Ejemplo: precio 146280,99, cantidad 2, BONIF 50 y total 177000 con IVA 21% implica BONIF 50%, no $50. El subtotal neto es aproximadamente 146280,99.
+- Si una columna DTO contiene 20 y la factura la usa como porcentaje, devolvé porcentaje_descuento=20 y tipo_descuento=porcentaje; NO devuelvas descuento=20 como importe monetario.
+- Si el valor es realmente monetario, devolvelo en descuento o bonificacion_importe y tipo=importe.
+- Si hay varios descuentos sucesivos, guardalos en descuentos[] y aplicalos en secuencia; NO los sumes como porcentajes simples.
+- Si el comprobante imprime precio neto unitario o subtotal neto, ese valor tiene prioridad para comprobar el resultado y no debe volver a descontarse.
+- No inventes descuentos para forzar el total.
 `
 
 export async function extraerConGemini(base64: string, mimeType: string, tipo: TipoComprobanteIA): Promise<ComprobanteExtraido> {
