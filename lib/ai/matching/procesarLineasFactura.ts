@@ -19,32 +19,68 @@ function numero(valor: unknown) { const n = Number(valor ?? 0); return Number.is
 function redondear(valor: number) { return Number(valor.toFixed(2)) }
 function cargosTotal(linea: LineaExtraida) { return (linea.cargos ?? []).reduce((s, c) => s + Math.abs(numero(c.importe)), 0) }
 
+function descuentoDesdeDetalle(linea: LineaExtraida, brutoOriginal: number) {
+  if (numero(linea.descuento) !== 0) return Math.abs(numero(linea.descuento))
+  if (numero(linea.porcentaje_descuento) !== 0) return brutoOriginal * Math.abs(numero(linea.porcentaje_descuento)) / 100
+  if (!linea.descuentos?.length) return 0
+
+  let base = brutoOriginal
+  let total = 0
+  for (const descuento of linea.descuentos) {
+    const importe = numero(descuento.importe)
+    const porcentaje = Math.abs(numero(descuento.porcentaje))
+    const reduccion = importe > 0 ? importe : base * porcentaje / 100
+    total += reduccion
+    base = Math.max(0, base - reduccion)
+  }
+  return total
+}
+
 function financieros(linea: LineaExtraida, negativo: boolean) {
   const cantidad = Math.max(1, numero(linea.cantidad ?? 1))
   const precioOriginal = Math.abs(numero(linea.precio_bruto_unitario ?? linea.precio_unitario))
   const brutoOriginal = cantidad * precioOriginal
   const cargo = cargosTotal(linea)
-  const subtotalOriginal = numero(linea.subtotal_neto)
-  const descuentoInformado = Math.abs(numero(linea.descuento))
-  const bonificacionCantidad = linea.tipo_bonificacion === "cantidad" ? Math.min(Math.max(0, numero(linea.cantidad_bonificada ?? linea.cantidad_bonificada_detalle)), cantidad) * precioOriginal : 0
+  const descuentoInformado = descuentoDesdeDetalle(linea, brutoOriginal)
+  const bonificacionCantidad = linea.tipo_bonificacion === "cantidad"
+    ? Math.min(Math.max(0, numero(linea.cantidad_bonificada ?? linea.cantidad_bonificada_detalle)), cantidad) * precioOriginal
+    : 0
   const bonificacionInformada = Math.abs(numero(linea.bonificacion_importe ?? linea.bonificacion))
   const bonificacionTotal = bonificacionInformada || bonificacionCantidad
 
   if (negativo) {
-    const importe = subtotalOriginal !== 0 ? -Math.abs(subtotalOriginal) : -(descuentoInformado || bonificacionInformada || Math.abs(numero(linea.precio_unitario)))
+    const importe = numero(linea.subtotal_neto) !== 0
+      ? -Math.abs(numero(linea.subtotal_neto))
+      : -(descuentoInformado || bonificacionInformada || Math.abs(numero(linea.precio_unitario)))
     const iva = numero(linea.iva ?? 0)
-    const ivaImporte = linea.iva_importe != null && numero(linea.iva_importe) !== 0 ? -Math.abs(numero(linea.iva_importe)) : redondear(importe * iva / 100)
-    return { precio_bruto_unitario: redondear(importe), precio_neto: redondear(importe), subtotal_neto: redondear(importe), iva_importe: redondear(ivaImporte), impuestos_internos: -Math.abs(numero(linea.impuestos_internos)), descuento: 0, bonificacion: 0, cantidad_bonificada: undefined, cantidad_bonificada_detalle: undefined, tipo_bonificacion: undefined as TipoBonificacionProcesada | undefined }
+    const ivaImporte = linea.iva_importe != null && numero(linea.iva_importe) !== 0
+      ? -Math.abs(numero(linea.iva_importe))
+      : redondear(importe * iva / 100)
+    return {
+      precio_bruto_unitario: redondear(importe), precio_neto: redondear(importe), subtotal_neto: redondear(importe), iva_importe: redondear(ivaImporte),
+      impuestos_internos: -Math.abs(numero(linea.impuestos_internos)), descuento: 0, bonificacion: 0,
+      cantidad_bonificada: undefined, cantidad_bonificada_detalle: undefined, tipo_bonificacion: undefined as TipoBonificacionProcesada | undefined,
+    }
   }
 
   const brutoConCargo = brutoOriginal + cargo
-  const subtotalObjetivo = subtotalOriginal !== 0 ? Math.abs(subtotalOriginal) : Math.max(0, brutoConCargo - descuentoInformado - bonificacionTotal)
+  const subtotalImpreso = numero(linea.subtotal_neto)
+  const netoUnitarioImpreso = numero(linea.precio_neto_unitario)
+  const subtotalDesdeNetoUnitario = netoUnitarioImpreso > 0 ? netoUnitarioImpreso * cantidad : 0
+  const subtotalObjetivo = subtotalImpreso !== 0
+    ? Math.abs(subtotalImpreso)
+    : subtotalDesdeNetoUnitario !== 0
+      ? subtotalDesdeNetoUnitario
+      : Math.max(0, brutoConCargo - descuentoInformado - bonificacionTotal)
+
   const reduccionTotal = Math.max(0, brutoConCargo - subtotalObjetivo)
-  const descuentoNormalizado = descuentoInformado > 0 ? Math.min(descuentoInformado, reduccionTotal) : Math.max(0, reduccionTotal - bonificacionTotal)
+  const descuentoNormalizado = Math.min(descuentoInformado, reduccionTotal)
   const bonificacionNormalizada = Math.min(bonificacionTotal, Math.max(0, reduccionTotal - descuentoNormalizado))
   const precioInterno = cargo > 0 ? brutoConCargo / cantidad : precioOriginal
   const iva = numero(linea.iva ?? 21)
-  const ivaImporte = linea.iva_importe != null && numero(linea.iva_importe) !== 0 ? Math.abs(numero(linea.iva_importe)) : redondear(subtotalObjetivo * iva / 100)
+  const ivaImporte = linea.iva_importe != null && numero(linea.iva_importe) !== 0
+    ? Math.abs(numero(linea.iva_importe))
+    : redondear(subtotalObjetivo * iva / 100)
   const bonificacionEsCantidad = linea.tipo_bonificacion === "cantidad"
 
   return {
@@ -56,7 +92,11 @@ function financieros(linea: LineaExtraida, negativo: boolean) {
 }
 
 function crearLineaDescuento(linea: LineaExtraida): LineaProcesada {
-  const importeExplicito = Math.max(Math.abs(numero(linea.subtotal_neto)), Math.abs(numero(linea.descuento)), Math.abs(numero(linea.bonificacion_importe ?? linea.bonificacion)), Math.abs(numero(linea.precio_unitario * Math.max(1, numero(linea.cantidad ?? 1)))))
+  const importeExplicito = Math.max(
+    Math.abs(numero(linea.subtotal_neto)), Math.abs(numero(linea.descuento)),
+    Math.abs(numero(linea.bonificacion_importe ?? linea.bonificacion)),
+    Math.abs(numero(linea.precio_unitario * Math.max(1, numero(linea.cantidad ?? 1))))
+  )
   const ivaImporte = Math.abs(numero(linea.iva_importe))
   return {
     producto_id: "", cantidad: 1, precio_unitario: redondear(-importeExplicito), iva: numero(linea.iva ?? 0), descuento: 0, precio_final: redondear(-importeExplicito),
