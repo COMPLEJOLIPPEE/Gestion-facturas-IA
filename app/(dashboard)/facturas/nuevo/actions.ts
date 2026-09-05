@@ -139,9 +139,11 @@ export async function crearFactura(formData: FormData) {
     throw new Error(`Error guardando items: ${errorItems.message}`)
   }
 
-  for (const item of itemsParaGuardar) {
-    if (!item.producto_id || item.es_ajuste_negativo) continue
-    const importeLinea = numero((items.find((original) => original.producto_id === item.producto_id && original.cantidad === item.cantidad)?.importe_linea))
+  for (let index = 0; index < itemsParaGuardar.length; index++) {
+    const item = itemsParaGuardar[index]
+    const original = items[index]
+    if (!item || !original || !item.producto_id || item.es_ajuste_negativo) continue
+    const importeLinea = numero(original.importe_linea)
     const subtotalNeto = numero(item.subtotal_neto)
     const ivaImporte = numero(item.iva_importe)
     const internos = numero(item.impuestos_internos)
