@@ -23,7 +23,7 @@ const openAISchema = {
         type: "object",
         properties: {
           descripcion: { type: "string" }, codigo_proveedor: { type: ["string", "null"] }, cantidad: { type: "number" }, cantidad_bonificada: { type: ["number", "null"] }, cantidad_bonificada_detalle: { type: ["number", "null"] },
-          precio_unitario: { type: "number" }, precio_bruto_unitario: { type: ["number", "null"] }, precio_neto: { type: ["number", "null"] }, precio_neto_unitario: { type: ["number", "null"] }, subtotal_neto: { type: ["number", "null"] }, precio_final: { type: ["number", "null"] },
+          precio_unitario: { type: "number" }, precio_bruto_unitario: { type: ["number", "null"] }, precio_neto: { type: ["number", "null"] }, precio_neto_unitario: { type: ["number", "null"] }, subtotal_neto: { type: ["number", "null"] }, importe_linea: { type: ["number", "null"] }, precio_final: { type: ["number", "null"] },
           iva: { type: ["number", "null"] }, iva_importe: { type: ["number", "null"] }, impuestos_internos: { type: "number" }, descuento: { type: ["number", "null"] }, porcentaje_descuento: { type: ["number", "null"] }, tipo_descuento: { type: ["string", "null"] },
           tipo_linea: { type: "string" }, es_ajuste_negativo: { type: "boolean" },
           descuentos: { type: "array", items: { type: "object", properties: { porcentaje: { type: ["number", "null"] }, importe: { type: ["number", "null"] }, descripcion: { type: ["string", "null"] } }, required: ["porcentaje", "importe", "descripcion"], additionalProperties: false } },
@@ -31,7 +31,7 @@ const openAISchema = {
           bonificacion: { type: ["number", "null"] }, bonificacion_importe: { type: ["number", "null"] }, bonificacion_tipo: { type: ["string", "null"] }, tipo_bonificacion: { type: ["string", "null"] },
           cargos: cargoSchema, columnas_presentes: { type: "array", items: { type: "string" } },
         },
-        required: ["descripcion", "codigo_proveedor", "cantidad", "cantidad_bonificada", "cantidad_bonificada_detalle", "precio_unitario", "precio_bruto_unitario", "precio_neto", "precio_neto_unitario", "subtotal_neto", "precio_final", "iva", "iva_importe", "impuestos_internos", "descuento", "porcentaje_descuento", "tipo_descuento", "descuentos", "grupo_descuento", "aplica_a_descripciones", "bonificacion", "bonificacion_importe", "bonificacion_tipo", "tipo_bonificacion", "cargos", "columnas_presentes"],
+        required: ["descripcion", "codigo_proveedor", "cantidad", "cantidad_bonificada", "cantidad_bonificada_detalle", "precio_unitario", "precio_bruto_unitario", "precio_neto", "precio_neto_unitario", "subtotal_neto", "importe_linea", "precio_final", "iva", "iva_importe", "impuestos_internos", "descuento", "porcentaje_descuento", "tipo_descuento", "descuentos", "grupo_descuento", "aplica_a_descripciones", "bonificacion", "bonificacion_importe", "bonificacion_tipo", "tipo_bonificacion", "cargos", "columnas_presentes"],
         additionalProperties: false,
       },
     },
@@ -64,28 +64,27 @@ IVA - REGLA CRÍTICA:
 - iva_importe es solamente el IVA de la línea. No confundas IVA con percepción de IVA.
 
 DESCUENTOS Y BONIFICACIONES - UNIDAD OBLIGATORIA:
-- Leé literalmente DTO., Dto., Descuento, Bonif. y equivalentes.
+- Leé literalmente las columnas DTO., Dto., Descuento, Bonif. y equivalentes.
 - Cada valor debe clasificarse como porcentaje, importe monetario o cantidad bonificada.
-- Si aparece %, guardalo en porcentaje_descuento o bonificacion_tipo=porcentaje y no lo conviertas en pesos.
-- Si el símbolo % NO aparece pero la columna representa porcentajes (por ejemplo BONIF. con valores 50, 25 o 20) y el cálculo porcentual explica el precio neto o el importe de la fila, tratá el valor como porcentaje.
-- Para decidir, priorizá el encabezado de la columna y la consistencia matemática entre cantidad, precio unitario, precio neto e importe final.
-- Ejemplo: precio 146280,99, cantidad 2, BONIF 50 y total 177000 con IVA 21% implica BONIF 50%, no $50.
-- Si DTO=20 es un porcentaje, devolvé porcentaje_descuento=20 y tipo_descuento=porcentaje.
+- Si aparece %, guardalo en porcentaje_descuento o bonificacion_tipo=porcentaje.
+- Si el símbolo % NO aparece pero la columna representa porcentajes (por ejemplo BONIF. con valores 50, 25 o 20) y el cálculo porcentual explica el precio neto o el importe de la fila, tratá el valor como porcentaje. NO lo conviertas en pesos.
+- Para decidir, priorizá encabezado y consistencia matemática entre cantidad, precio unitario, precio neto e importe de línea.
+- Si DTO=20 es porcentaje, devolvé porcentaje_descuento=20 y tipo_descuento=porcentaje.
 - Si es monetario, devolvelo en descuento/bonificacion_importe y tipo=importe.
-- Descuentos sucesivos van en descuentos[] y se aplican en secuencia, no se suman como porcentajes simples.
+- Descuentos sucesivos van en descuentos[] y se aplican en secuencia.
 - Si existe precio neto unitario o subtotal neto impreso, tiene prioridad y no debe volver a descontarse.
 
 IMPORTES:
 - Si la factura imprime subtotal neto de línea, usalo como subtotal_neto.
 - Si imprime precio neto unitario pero no subtotal neto, calculá subtotal_neto = precio_neto_unitario × cantidad.
-- Si imprime IMPORTE/TOTAL de línea incluyendo IVA, NO lo guardes como subtotal_neto; usalo para validar.
+- Si imprime IMPORTE/TOTAL de línea que incluye IVA, guardalo en importe_linea y NO lo guardes como subtotal_neto. Usalo para validar precio neto + IVA + impuestos internos.
 - No fuerces las líneas para hacer coincidir el total.
 
 IMPUESTOS INTERNOS:
-Si existe I.I., I. INTERNOS, IMP INT, IMP. INT, IMP INTERNO o equivalente, leer el importe alineado para cada fila. Si existe pero vale 0, conservar 0.
+Si existe una columna I.I., I. INTERNOS, IMP INT, IMP. INT, IMP INTERNO o equivalente, leer el importe alineado para CADA fila. Si existe pero vale 0, conservar 0.
 
 COLUMNAS VISIBLES:
-En columnas_presentes devolvé SOLO las columnas que realmente aparecen en la tabla, en el mismo orden visual. Claves permitidas: cantidad, descripcion, codigo, precio_unitario, descuento, bonificacion, precio_neto_unitario, iva, iva_importe, impuestos_internos, cargo, subtotal_neto, importe.
+En columnas_presentes devolvé SOLO las columnas que realmente aparecen en la tabla, en el mismo orden visual. Claves: cantidad, descripcion, codigo, precio_unitario, descuento, bonificacion, precio_neto_unitario, iva, iva_importe, impuestos_internos, cargo, subtotal_neto, importe.
 Si una columna existe aunque todos sus valores sean 0, incluila. Si no existe, no la inventes.
 
 DATOS GENERALES:

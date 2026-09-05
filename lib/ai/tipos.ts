@@ -24,6 +24,7 @@ export type LineaExtraida = {
   precio_neto?: number | null
   precio_neto_unitario?: number | null
   subtotal_neto?: number | null
+  importe_linea?: number | null
   precio_final?: number | null
   iva_importe?: number | null
   impuestos_internos?: number | null

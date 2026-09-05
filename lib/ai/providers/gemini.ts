@@ -137,7 +137,7 @@ cargos propios de la línea y subtotal/importe final.
 
 Si la factura imprime un subtotal neto de línea, usalo como subtotal_neto.
 Si imprime precio neto unitario pero no subtotal neto, calculá subtotal_neto = precio_neto_unitario × cantidad.
-Si imprime "IMPORTE" o "TOTAL" de línea que incluye IVA, NO lo guardes como subtotal_neto; usalo solo para validar contra precio neto + IVA + impuestos internos.
+Si imprime "IMPORTE" o "TOTAL" de línea que incluye IVA, guardalo además en importe_linea y NO lo guardes como subtotal_neto; usalo para validar contra precio neto + IVA + impuestos internos.
 
 Para una línea de descuento agrupado:
 - tipo_linea = descuento_agrupado

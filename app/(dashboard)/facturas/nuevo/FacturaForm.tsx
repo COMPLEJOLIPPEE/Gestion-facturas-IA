@@ -40,7 +40,12 @@ export function FacturaForm({ proveedores, empresas, empresaActivaId, productos,
   const actualizarLinea = (index: number, campo: keyof LineaFactura, valor: string | number | boolean) => setLineas((prev) => prev.map((linea, i) => {
     if (i !== index) return linea
     const siguiente = { ...linea, [campo]: valor }
-    if (["cantidad", "precio_unitario", "precio_bruto_unitario", "descuento", "bonificacion", "cantidad_bonificada", "cantidad_bonificada_detalle", "tipo_bonificacion", "iva"].includes(campo)) {
+    if (campo === "iva") {
+      const subtotalActual = numero(siguiente.subtotal_neto)
+      const tasaIVA = numero(valor)
+      return { ...siguiente, iva: tasaIVA, iva_importe: redondear(subtotalActual * tasaIVA / 100), precio_neto: siguiente.precio_neto ?? subtotalActual }
+    }
+    if (["cantidad", "precio_unitario", "precio_bruto_unitario", "descuento", "bonificacion", "cantidad_bonificada", "cantidad_bonificada_detalle", "tipo_bonificacion"].includes(campo)) {
       const cantidad = Math.max(0, numero(campo === "cantidad" ? valor : siguiente.cantidad))
       const precioUnitario = numero(campo === "precio_unitario" ? valor : siguiente.precio_unitario)
       const brutoGuardado = numero(siguiente.precio_bruto_unitario)
@@ -54,7 +59,7 @@ export function FacturaForm({ proveedores, empresas, empresaActivaId, productos,
       const esAjusteNegativo = siguiente.tipo_linea === "ajuste" || siguiente.es_ajuste_negativo === true || bruto < 0
       const subtotalNeto = esAjusteNegativo ? bruto : Math.max(0, bruto - descuento - bonificacionImporte)
       const precioNeto = cantidad > 0 ? subtotalNeto / cantidad : 0
-      const tasaIVA = numero(campo === "iva" ? valor : siguiente.iva)
+      const tasaIVA = numero(siguiente.iva)
       const ivaImporte = esAjusteNegativo ? (siguiente.iva_importe != null ? numero(siguiente.iva_importe) : subtotalNeto * (tasaIVA / 100)) : subtotalNeto * (tasaIVA / 100)
       return { ...siguiente, cantidad, precio_unitario: precioUnitario, precio_bruto_unitario: redondear(precioBrutoUnitario), descuento: esAjusteNegativo ? 0 : descuento, bonificacion: esAjusteNegativo ? 0 : bonificacion, cantidad_bonificada: cantidadBonificada, precio_neto: redondear(precioNeto), subtotal_neto: redondear(subtotalNeto), iva_importe: redondear(ivaImporte), precio_final: redondear(precioNeto) }
     }
@@ -80,12 +85,14 @@ export function FacturaForm({ proveedores, empresas, empresaActivaId, productos,
       const bonificacionPorCantidad = linea.tipo_bonificacion === "cantidad"
       const bonificacionImporte = bonificacionPorCantidad ? cantidadBonificada * Math.abs(precioBrutoUnitario) : bonificacion
       const esAjusteNegativo = linea.tipo_linea === "ajuste" || linea.es_ajuste_negativo === true || bruto < 0
-      const subtotalNeto = esAjusteNegativo ? bruto : Math.max(0, bruto - descuento - bonificacionImporte)
+      const subtotalExplicito = linea.subtotal_neto != null ? numero(linea.subtotal_neto) : null
+      const subtotalNeto = esAjusteNegativo ? bruto : subtotalExplicito != null ? subtotalExplicito : Math.max(0, bruto - descuento - bonificacionImporte)
       const precioNeto = cantidad > 0 ? subtotalNeto / cantidad : 0
       const tasaIVA = numero(linea.iva)
-      const ivaImporte = esAjusteNegativo ? numero(linea.iva_importe) : subtotalNeto * (tasaIVA / 100)
+      const ivaImporte = linea.iva_importe != null ? numero(linea.iva_importe) : subtotalNeto * (tasaIVA / 100)
       const impuestosInternos = numero(linea.impuestos_internos)
-      return { ...linea, cantidad, precio_unitario: precioUnitario, precio_bruto_unitario: redondear(precioBrutoUnitario), descuento: esAjusteNegativo ? 0 : descuento, bonificacion: esAjusteNegativo ? 0 : bonificacion, cantidad_bonificada: cantidadBonificada, precio_neto: redondear(precioNeto), precio_final: redondear(precioNeto), subtotal_neto: redondear(subtotalNeto), iva_importe: redondear(ivaImporte), impuestos_internos: redondear(impuestosInternos), _bruto: bruto, _descuentoTotal: esAjusteNegativo ? Math.abs(bruto) : descuento + bonificacionImporte }
+      const reduccionReal = esAjusteNegativo ? Math.abs(bruto) : Math.max(0, bruto - subtotalNeto)
+      return { ...linea, cantidad, precio_unitario: precioUnitario, precio_bruto_unitario: redondear(precioBrutoUnitario), descuento: esAjusteNegativo ? 0 : descuento, bonificacion: esAjusteNegativo ? 0 : bonificacion, cantidad_bonificada: cantidadBonificada, precio_neto: redondear(precioNeto), precio_final: redondear(precioNeto), subtotal_neto: redondear(subtotalNeto), iva_importe: redondear(ivaImporte), impuestos_internos: redondear(impuestosInternos), _bruto: bruto, _descuentoTotal: reduccionReal }
     })
     const resumen = lineasCalculadas.reduce((a, l) => ({ subtotalBruto: a.subtotalBruto + l._bruto, descuentos: a.descuentos + l._descuentoTotal, subtotalNeto: a.subtotalNeto + l.subtotal_neto, iva: a.iva + l.iva_importe, impuestosInternos: a.impuestosInternos + l.impuestos_internos }), { subtotalBruto: 0, descuentos: 0, subtotalNeto: 0, iva: 0, impuestosInternos: 0 })
     const totalCargos = cargos.reduce((a, c) => a + numero(c.importe), 0)
