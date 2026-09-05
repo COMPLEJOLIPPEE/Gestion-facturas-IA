@@ -48,7 +48,7 @@ function calcularControlLinea(item: ItemInput) {
   const subtotal = subtotalExplicito ?? (ajuste ? -Math.abs(cantidad * precioUnitario) : Math.max(0, cantidad * Math.abs(precioUnitario)))
   const iva = ivaExplicito ?? 0
   const internos = ajuste ? -Math.abs(numero(item.impuestos_internos)) : Math.abs(numero(item.impuestos_internos))
-  return { cantidad, precioUnitario, subtotal, iva, internos }
+  return { cantidad, precioUnitario, subtotal, iva, internos, ajuste }
 }
 
 export async function crearFactura(formData: FormData) {
@@ -81,8 +81,6 @@ export async function crearFactura(formData: FormData) {
   const cargosControl = redondear(cargos.reduce((s, c) => s + numero(c.importe), 0))
   const totalControl = redondear(subtotalControl + ivaControl + internosControl + cargosControl)
 
-  // Los totales oficiales extraídos por IA son la fuente de verdad.
-  // Los controles anteriores solo sirven para detectar diferencias y no bloquean el guardado.
   const iaSubtotal = formData.get("ia_subtotal_neto")
   const iaIva = formData.get("ia_iva_total")
   const iaTotal = formData.get("ia_total")
@@ -142,8 +140,6 @@ export async function crearFactura(formData: FormData) {
 
   for (const item of itemsParaGuardar) {
     if (!item.producto_id || item.es_ajuste_negativo) continue
-    // Costo real del producto: importe de la línea con IVA e impuestos propios,
-    // dividido por la cantidad. Las percepciones/cargos generales quedan fuera.
     const subtotalNeto = numero(item.subtotal_neto)
     const ivaImporte = numero(item.iva_importe)
     const internos = numero(item.impuestos_internos)
