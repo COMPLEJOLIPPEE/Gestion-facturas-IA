@@ -25,59 +25,64 @@ ENCABEZADOS EQUIVALENTES A IMPUESTOS INTERNOS:
 I.I | I.I. | I INTERNOS | I. INTERNOS | I INTERNO | I. INTERNO |
 IMP I | IMP.I | IMP INT | IMP. INT | IMP INTERNO | IMP. INTERNO |
 IMP INTERNOS | IMP. INTERNOS | CARGOS INT | CARGOS INTERNOS.
-
-Todos estos encabezados significan la columna impuestos_internos.
-Si existe una columna con cualquiera de estas variantes, leer el importe alineado en esa columna para CADA FILA.
-No confundirla con IVA, IVA $, descuento, precio neto ni total.
-Si la columna existe pero una fila tiene 0 o está vacía, devolver 0 para esa fila.
+Si existe una de estas columnas, leé literalmente el importe alineado de CADA FILA.
+No calcules impuestos internos. Si la columna existe pero la fila está vacía o en 0, devolvé 0.
 `
 
 const REGLAS_LINEAS = `
 REGLAS OBLIGATORIAS PARA LAS FILAS:
-- No omitas ninguna fila comercial visible que tenga descripción y un importe.
+- No omitas ninguna fila comercial visible que tenga descripción y/o importe.
 - Cada fila debe clasificarse como producto, descuento_linea, descuento_agrupado o ajuste.
 - Una línea de descuento o bonificación que afecta a varios productos NO se debe asociar a ningún producto del catálogo.
-- En esos casos conservá la línea independiente y su importe como reducción.
-- No intentes repartir un descuento agrupado entre los productos salvo que la factura lo haga explícitamente.
-- No conviertas una línea de descuento agrupado en producto.
-- Si una fila tiene un cargo propio por logística, administración u otro concepto, conservá ese cargo en cargos de la línea y también el subtotal/importe final de la línea si está impreso.
-- Los cargos son positivos; descuentos y bonificaciones son reducciones.
-- Una bonificación por cantidad (por ejemplo 3+1) debe conservar la cantidad bonificada y no convertirse automáticamente en descuento monetario.
+- Conservá las líneas independientes y su importe/signo tal como aparecen.
+- No repartas descuentos agrupados entre productos.
+- Si una fila tiene un cargo propio, leé y guardá el cargo tal como aparece.
+- Una bonificación por cantidad (por ejemplo 3+1) debe conservar la cantidad bonificada si está impresa.
 `
 
 const COLUMNAS = `
 ESTRUCTURA VISUAL DE LA TABLA:
 - Detectá las columnas que REALMENTE aparecen en la tabla de productos.
-- Devolvé en columnas_presentes las claves canónicas, en el mismo orden visual en que aparecen.
+- Devolvé en columnas_presentes las claves canónicas, en el mismo orden visual.
 - Claves permitidas: cantidad, descripcion, codigo, precio_unitario, descuento, bonificacion, precio_neto_unitario, iva, iva_importe, impuestos_internos, cargo, subtotal_neto, importe.
-- Si una columna existe en el documento pero sus valores son 0, IGUAL debe aparecer en columnas_presentes.
-- Si una columna no existe, NO la incluyas.
-- No agregues columnas solamente porque el modelo conozca ese dato.
+- Si una columna existe aunque sus valores sean 0, IGUAL debe aparecer.
+- Si una columna no existe, NO la inventes.
 `
 
 const REGLAS_IVA = `
-IVA: REGLA CRÍTICA
-- Buscá primero el cuadro/resumen fiscal del comprobante donde normalmente aparecen "IVA 21%", "IVA 10,5%", "IVA 27%", "IVA 5%", "IVA 2,5%" o "IVA 0%".
-- Si allí aparece un importe distinto de 0 para una alícuota, esa alícuota es la fuente de verdad. NO asumas 21% por defecto.
-- Si la tabla de productos NO tiene columna IVA pero el pie fiscal informa una sola alícuota no nula para las líneas gravadas, asigná esa alícuota a las líneas gravadas aunque no la agregues a columnas_presentes.
-- Si el pie informa IVA 10,5%, jamás devuelvas 21% por asumir que el proveedor es Responsable Inscripto.
-- iva_importe debe ser el importe de IVA correspondiente a esa alícuota, no el total con IVA de la línea.
+IVA: SOLO LECTURA
+- Buscá el cuadro/resumen fiscal del comprobante donde aparecen "IVA 21%", "IVA 10,5%", "IVA 27%", "IVA 5%", "IVA 2,5%" o "IVA 0%".
+- Leé y guardá exactamente los importes impresos para cada alícuota.
+- Si la tabla tiene una columna IVA, leé literalmente el valor de cada fila.
+- Si la tabla NO tiene columna IVA, NO inventes un IVA por defecto para las líneas. Guardá la alícuota del pie en iva_total solo si está impresa.
+- No calcules IVA a partir de subtotal, precio unitario o total.
 - No confundas "Percepción IVA" con "IVA".
 `
 
 const REGLAS_DESCUENTOS = `
-DESCUENTOS Y BONIFICACIONES: UNIDAD OBLIGATORIA
+DESCUENTOS Y BONIFICACIONES: LEER, NO CALCULAR
 - Leé literalmente las columnas DTO., Dto., Descuento, Bonif. y equivalentes.
-- Cada valor de descuento/bonificación debe tener una interpretación: porcentaje, importe monetario o cantidad bonificada.
-- Si el comprobante muestra el símbolo %, escribí porcentaje_descuento o bonificacion_tipo=porcentaje y guardá el porcentaje sin el símbolo.
-- Si el símbolo % NO está impreso pero la columna representa porcentajes (por ejemplo BONIF. con valores 50, 25, 20) y el cálculo con ese porcentaje explica el importe neto/total de la fila, tratá el valor como porcentaje. NO lo conviertas en $50/$20.
-- Para decidir entre porcentaje e importe, priorizá el encabezado de la columna y la consistencia matemática con precio unitario, cantidad, precio neto y total de línea.
-- Ejemplo: precio 146280,99, cantidad 2, BONIF 50 y total 177000 con IVA 21% implica BONIF 50%, no $50. El subtotal neto es aproximadamente 146280,99.
-- Si una columna DTO contiene 20 y la factura la usa como porcentaje, devolvé porcentaje_descuento=20 y tipo_descuento=porcentaje; NO devuelvas descuento=20 como importe monetario.
-- Si el valor es realmente monetario, devolvelo en descuento o bonificacion_importe y tipo=importe.
-- Si hay varios descuentos sucesivos, guardalos en descuentos[] y aplicalos en secuencia; NO los sumes como porcentajes simples.
-- Si el comprobante imprime precio neto unitario o subtotal neto, ese valor tiene prioridad para comprobar el resultado y no debe volver a descontarse.
-- No inventes descuentos para forzar el total.
+- Si el comprobante imprime %, guardá el porcentaje sin el símbolo.
+- Si no imprime %, NO conviertas el valor a pesos ni a porcentaje por inferencia matemática. Conservá el valor y el tipo solo si el encabezado permite determinarlo.
+- Si el comprobante imprime un importe monetario, guardalo como importe.
+- Si imprime una cantidad bonificada, guardá esa cantidad.
+- Si hay varios descuentos sucesivos, guardalos individualmente en descuentos[] tal como aparecen. NO los sumes ni los apliques.
+- Si existe precio neto unitario, subtotal neto o importe de línea impreso, LEÉ ese valor directamente. NO lo recalcules.
+- Nunca inventes un descuento para hacer coincidir el total.
+`
+
+const REGLAS_EXTRACCION_LITERAL = `
+REGLA CENTRAL: LA IA ES UN LECTOR, NO UNA CALCULADORA.
+- No sumes, restes, multipliques ni dividas importes de la factura para completar campos.
+- No derives subtotal_neto desde precio_neto_unitario × cantidad.
+- No derives precio_neto_unitario desde subtotal_neto ÷ cantidad.
+- No derives IVA desde una alícuota aplicada a un subtotal.
+- No derives descuentos/bonificaciones desde diferencias entre precios.
+- No derives importe_linea desde subtotal + IVA.
+- Cada campo debe contener el valor que esté IMPRESO en el documento.
+- Si un campo no está impreso o no puede leerse con seguridad, devolvé null cuando el schema lo permita.
+- La única interpretación permitida es identificar qué columna/concepto representa cada dato visible.
+- Los cálculos de control y el costo unitario se realizan FUERA de la IA, en la aplicación.
 `
 
 export async function extraerConGemini(base64: string, mimeType: string, tipo: TipoComprobanteIA): Promise<ComprobanteExtraido> {
@@ -97,8 +102,10 @@ Analizá TODO el documento antes de responder.
 Devolvé únicamente un JSON válido siguiendo exactamente el schema recibido.
 
 IMPORTANTE: una factura es una tabla visual. No la leas solamente como texto lineal.
-Reconstruí la relación entre encabezado, columna y fila.
+Reconstruí la relación entre encabezado, columna y fila, pero NO hagas cálculos para completar datos.
 
+==================================================
+${REGLAS_EXTRACCION_LITERAL}
 ==================================================
 ${DICCIONARIO_IMPUESTOS_INTERNOS}
 ==================================================
@@ -112,7 +119,7 @@ ${REGLAS_DESCUENTOS}
 ==================================================
 DATOS GENERALES Y TOTALES OFICIALES
 ==================================================
-Identificá proveedor, número, fechas y los importes del pie/resumen:
+Identificá y LEÉ literalmente los importes impresos del pie/resumen:
 - subtotal bruto
 - descuento total
 - subtotal neto
@@ -122,59 +129,55 @@ Identificá proveedor, número, fechas y los importes del pie/resumen:
 - otros cargos
 - total final
 
-MUY IMPORTANTE: para IVA, tomá como fuente de verdad el desglose fiscal por alícuota del pie si está presente. No reconstruyas el IVA únicamente como total menos subtotal.
-
-Los importes del pie/resumen son la fuente de verdad para validar el comprobante.
-No inventes información. Si un dato no aparece, devolvé null.
+No calcules ningún total faltante a partir de otros valores.
+Si un dato no aparece, devolvé null.
 
 ==================================================
 IMPORTES DE CADA LÍNEA
 ==================================================
-Para cada línea identificá, cuando existan:
+Para cada línea identificá, SOLO SI ESTÁ IMPRESO:
 descripción, código del proveedor, cantidad, precio unitario, precio bruto unitario,
-descuentos, bonificaciones, precio neto, IVA, importe de IVA, impuestos internos,
-cargos propios de la línea y subtotal/importe final.
+descuentos, bonificaciones, precio neto, precio neto unitario, IVA, importe de IVA,
+impuestos internos, cargos propios de la línea, subtotal neto e importe/total de línea.
 
-Si la factura imprime un subtotal neto de línea, usalo como subtotal_neto.
-Si imprime precio neto unitario pero no subtotal neto, calculá subtotal_neto = precio_neto_unitario × cantidad.
-Si imprime "IMPORTE" o "TOTAL" de línea que incluye IVA, guardalo además en importe_linea y NO lo guardes como subtotal_neto; usalo para validar contra precio neto + IVA + impuestos internos.
+Si la factura imprime un subtotal neto de línea, guardalo en subtotal_neto.
+Si NO lo imprime, NO lo calcules.
+Si imprime precio neto unitario, guardalo en precio_neto_unitario.
+Si NO lo imprime, NO lo calcules.
+Si imprime "IMPORTE" o "TOTAL" de línea, guardalo en importe_linea exactamente como aparece.
+No transformes importe_linea en subtotal_neto.
 
 Para una línea de descuento agrupado:
 - tipo_linea = descuento_agrupado
 - no requiere producto
-- es_ajuste_negativo = true si la línea representa una reducción monetaria
-- conservá el importe negativo cuando esté impreso
-- NO asocies esa línea a un producto específico
+- es_ajuste_negativo = true si la factura la presenta como reducción
+- conservá el importe y signo impresos
+- NO la asocies a un producto
 
 Para una línea de descuento individual:
 - tipo_linea = descuento_linea
-- si la línea representa una reducción monetaria, es_ajuste_negativo = true
+- conservá el valor impreso
 - no requiere producto cuando es una línea independiente
 
-Para una línea normal de producto:
+Para una línea normal:
 - tipo_linea = producto
 - es_ajuste_negativo = false
 
-Para cargos de una línea:
-- guardalos en cargos como conceptos positivos
-- no los confundas con impuestos ni descuentos
+Para cargos:
+- guardalos tal como aparecen, sin sumarlos ni distribuirlos.
 
 ==================================================
 SIGNOS
 ==================================================
-No interpretes un guion aislado como signo negativo.
-Usá signo negativo únicamente cuando la factura indique que el importe es una reducción/ajuste.
-No conviertas descuentos o bonificaciones en positivos si la factura los muestra como negativos.
+Usá el signo que visualmente tenga el importe en la factura.
+No agregues signo negativo por deducción matemática.
+No conviertas descuentos/bonificaciones en importes monetarios si la factura no los presenta así.
 
 ==================================================
-VALIDACIÓN
+VALIDACIÓN VISUAL
 ==================================================
-Comprobá cuando sea posible:
-subtotal neto + IVA + impuestos internos + cargos/percepciones = total final.
-
-Comprobá también que el descuento total del pie sea compatible con los descuentos/bonificaciones identificados.
-
-NO fuerces las líneas para hacer coincidir el total. Si existe una diferencia, conservá los importes leídos y dejá que el sistema muestre la advertencia.
+Podés revisar visualmente que las columnas estén correctamente alineadas, pero NO modifiques valores para que coincidan entre sí.
+Si subtotal, IVA o total no coinciden con la suma de líneas, conservá TODOS los valores impresos y no intentes corregirlos.
 `
 
   const contenido = mimeType === "application/pdf"
