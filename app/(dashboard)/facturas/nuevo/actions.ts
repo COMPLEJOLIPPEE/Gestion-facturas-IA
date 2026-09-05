@@ -38,19 +38,26 @@ type ItemInput = {
   descripcionLeida?: string | null
 }
 
-function numero(valor: unknown) { const resultado = Number(valor ?? 0); return Number.isFinite(resultado) ? resultado : 0 }
-function redondear(valor: number) { return Number(valor.toFixed(2)) }
+function numero(valor: unknown) {
+  const resultado = Number(valor ?? 0)
+  return Number.isFinite(resultado) ? resultado : 0
+}
+
+function redondear(valor: number) {
+  return Number(valor.toFixed(2))
+}
+
 const EMPRESA_COOKIE = "factura_ia_empresa_activa"
 
 function calcularControlLinea(item: ItemInput) {
   const cantidad = Math.max(0, numero(item.cantidad))
   const precioUnitario = numero(item.precio_unitario)
-  const subtotalExplicito = item.subtotal_neto != null && Number.isFinite(Number(item.subtotal_neto)) ? numero(item.subtotal_neto) : null
-  const ivaExplicito = item.iva_importe != null && Number.isFinite(Number(item.iva_importe)) ? numero(item.iva_importe) : null
-  const ajuste = item.tipo_linea === "ajuste" || item.es_ajuste_negativo === true || precioUnitario < 0
+  const subtotalExplicito = item.subtotal_neto != null ? numero(item.subtotal_neto) : null
+  const ivaExplicito = item.iva_importe != null ? numero(item.iva_importe) : null
+  const ajuste = item.tipo_linea === "ajuste" || item.es_ajuste_negativo === true
   const subtotal = subtotalExplicito ?? (ajuste ? -Math.abs(cantidad * precioUnitario) : Math.max(0, cantidad * Math.abs(precioUnitario)))
   const iva = ivaExplicito ?? 0
-  const internos = ajuste ? -Math.abs(numero(item.impuestos_internos)) : Math.abs(numero(item.impuestos_internos))
+  const internos = numero(item.impuestos_internos)
   return { cantidad, precioUnitario, subtotal, iva, internos, ajuste }
 }
 
@@ -84,51 +91,74 @@ export async function crearFactura(formData: FormData) {
   const cargosControl = redondear(cargos.reduce((s, c) => s + numero(c.importe), 0))
   const totalControl = redondear(subtotalControl + ivaControl + internosControl + cargosControl)
 
-  const iaSubtotal = formData.get("ia_subtotal_neto")
-  const iaIva = formData.get("ia_iva_total")
-  const iaTotal = formData.get("ia_total")
-  const oficialSubtotal = iaSubtotal === null || iaSubtotal === "" ? null : numero(iaSubtotal)
-  const oficialIva = iaIva === null || iaIva === "" ? null : numero(iaIva)
-  const oficialTotal = iaTotal === null || iaTotal === "" ? null : numero(iaTotal)
+  const oficial = (nombre: string) => {
+    const valor = formData.get(nombre)
+    return valor === null || valor === "" ? null : numero(valor)
+  }
+
+  const oficialSubtotalBruto = oficial("ia_subtotal_bruto")
+  const oficialDescuentoTotal = oficial("ia_descuento_total")
+  const oficialSubtotal = oficial("ia_subtotal_neto")
+  const oficialIva = oficial("ia_iva_total")
+  const oficialInternos = oficial("ia_impuestos_internos_total")
+  const oficialTotal = oficial("ia_total")
 
   const subtotal = oficialSubtotal !== null ? redondear(oficialSubtotal) : subtotalControl
   const iva = oficialIva !== null ? redondear(oficialIva) : ivaControl
   const total = oficialTotal !== null ? redondear(oficialTotal) : totalControl
-  const impuestosInternos = internosControl
+  const impuestosInternos = oficialInternos !== null ? redondear(oficialInternos) : internosControl
   const otrosCargos = cargosControl
-  const descuentoTotal = redondear(items.reduce((s, item) => s + Math.abs(numero(item.descuento)), 0) + items.reduce((s, item) => s + Math.abs(numero(item.bonificacion)), 0))
-  const subtotalBruto = redondear(controles.reduce((s, l) => s + Math.abs(l.cantidad * l.precioUnitario), 0))
+  const descuentoTotal = oficialDescuentoTotal !== null ? redondear(oficialDescuentoTotal) : 0
+  const subtotalBruto = oficialSubtotalBruto !== null ? redondear(oficialSubtotalBruto) : 0
 
-  const { data: factura, error: errorFactura } = await supabase.from("facturas").insert({ numero: (formData.get("numero") as string) || null, fecha: formData.get("fecha") as string, fecha_vencimiento: (formData.get("fecha_vencimiento") as string) || null, proveedor_id: formData.get("proveedor_id") as string, empresa_id: empresaId, subtotal, subtotal_bruto: subtotalBruto, descuento_total: descuentoTotal, iva, impuestos_internos: impuestosInternos, otros_cargos: otrosCargos, total, estado: "pendiente" }).select("id").single()
+  const { data: factura, error: errorFactura } = await supabase.from("facturas").insert({
+    numero: (formData.get("numero") as string) || null,
+    fecha: formData.get("fecha") as string,
+    fecha_vencimiento: (formData.get("fecha_vencimiento") as string) || null,
+    proveedor_id: formData.get("proveedor_id") as string,
+    empresa_id: empresaId,
+    subtotal,
+    subtotal_bruto: subtotalBruto,
+    descuento_total: descuentoTotal,
+    iva,
+    impuestos_internos: impuestosInternos,
+    otros_cargos: otrosCargos,
+    total,
+    estado: "pendiente",
+  }).select("id").single()
   if (errorFactura || !factura) throw new Error(`Error creando factura: ${errorFactura?.message}`)
 
   const itemsParaGuardar = items.map((item) => {
     const l = calcularControlLinea(item)
+    const esPorcentaje = item.tipo_descuento === "porcentaje"
+    const bonificacionEsPorcentaje = item.tipo_bonificacion === "porcentaje"
     const descuentosDetalle: DescuentoDetalle[] = [...(item.descuentos ?? [])]
     if (item.descuento_porcentaje != null) descuentosDetalle.push({ descripcion: "Descuento porcentual", porcentaje: Math.abs(numero(item.descuento_porcentaje)), importe: null })
     if (item.grupo_descuento) descuentosDetalle.push({ descripcion: item.grupo_descuento, importe: Math.abs(numero(item.descuento)) || null })
+
     return {
       factura_id: factura.id,
       producto_id: l.ajuste ? null : item.producto_id,
       descripcion: item.descripcionLeida ?? null,
       tipo_linea: l.ajuste ? "ajuste" : "producto",
-      es_ajuste_negativo: l.ajuste,
-      cantidad: l.cantidad,
-      precio_unitario: redondear(l.ajuste ? -Math.abs(l.precioUnitario) : Math.abs(l.precioUnitario)),
+      es_ajuste_negativo: item.es_ajuste_negativo === true,
+      cantidad: numero(item.cantidad),
+      precio_unitario: numero(item.precio_unitario),
       iva: numero(item.iva),
       "alicuota IVA": numero(item.iva),
-      descuento: redondear(l.ajuste ? 0 : Math.abs(numero(item.descuento))),
-      precio_final: item.precio_final != null ? redondear(numero(item.precio_final)) : null,
-      precio_bruto_unitario: item.precio_bruto_unitario != null ? redondear(l.ajuste ? -Math.abs(numero(item.precio_bruto_unitario)) : Math.abs(numero(item.precio_bruto_unitario))) : null,
-      descuento_importe: redondear(l.ajuste ? 0 : Math.abs(numero(item.descuento))),
-      bonificacion_importe: redondear(l.ajuste ? 0 : Math.abs(numero(item.bonificacion))),
-      precio_neto_unitario: item.precio_neto_unitario != null ? redondear(numero(item.precio_neto_unitario)) : null,
-      subtotal_neto: item.subtotal_neto != null ? redondear(l.ajuste ? -Math.abs(numero(item.subtotal_neto)) : Math.abs(numero(item.subtotal_neto))) : null,
-      iva_importe: item.iva_importe != null ? redondear(l.ajuste ? -Math.abs(numero(item.iva_importe)) : Math.abs(numero(item.iva_importe))) : null,
-      impuestos_internos: redondear(l.internos),
+      descuento: numero(item.descuento),
+      descuento_importe: esPorcentaje ? null : numero(item.descuento),
+      precio_final: item.precio_final != null ? numero(item.precio_final) : null,
+      precio_bruto_unitario: item.precio_bruto_unitario != null ? numero(item.precio_bruto_unitario) : null,
+      bonificacion_importe: bonificacionEsPorcentaje ? null : (item.bonificacion != null ? numero(item.bonificacion) : null),
+      precio_neto_unitario: item.precio_neto_unitario != null ? numero(item.precio_neto_unitario) : null,
+      subtotal_neto: item.subtotal_neto != null ? numero(item.subtotal_neto) : null,
+      importe_linea: item.importe_linea != null ? numero(item.importe_linea) : null,
+      iva_importe: item.iva_importe != null ? numero(item.iva_importe) : null,
+      impuestos_internos: item.impuestos_internos != null ? numero(item.impuestos_internos) : null,
       descuentos_detalle: descuentosDetalle.length ? descuentosDetalle : null,
       bonificacion_tipo: item.tipo_bonificacion ?? null,
-      cantidad_bonificada: numero(item.cantidad_bonificada ?? item.cantidad_bonificada_detalle) || null,
+      cantidad_bonificada: item.cantidad_bonificada ?? item.cantidad_bonificada_detalle ?? null,
       cargos_detalle: item.cargos?.length ? item.cargos : null,
       columnas_presentes: item.columnas_presentes?.length ? item.columnas_presentes : null,
     }
@@ -141,17 +171,19 @@ export async function crearFactura(formData: FormData) {
     throw new Error(`Error guardando items: ${errorItems.message}`)
   }
 
-  for (let index = 0; index < itemsParaGuardar.length; index++) {
-    const item = itemsParaGuardar[index]
-    const original = items[index]
-    if (!item || !original || !item.producto_id || item.es_ajuste_negativo) continue
-    const importeLinea = numero(original.importe_linea)
-    const subtotalNeto = numero(item.subtotal_neto)
-    const ivaImporte = numero(item.iva_importe)
-    const internos = numero(item.impuestos_internos)
-    const totalProducto = importeLinea > 0 ? importeLinea : subtotalNeto + ivaImporte + internos
-    const costoReal = item.cantidad > 0 ? totalProducto / item.cantidad : 0
+  // ÚNICO cálculo de costo de producto: importe total de la línea / cantidad.
+  // Si la factura no imprimió importe_linea, no inventamos un costo.
+  for (let index = 0; index < items.length; index++) {
+    const item = items[index]
+    if (!item || !item.producto_id || item.es_ajuste_negativo || item.tipo_linea === "ajuste") continue
+
+    const importeLinea = item.importe_linea
+    const cantidad = numero(item.cantidad)
+    if (importeLinea == null || cantidad <= 0) continue
+
+    const costoReal = numero(importeLinea) / cantidad
     if (costoReal <= 0) continue
+
     const { data: productoActual } = await supabase.from("productos").select("costo_actual").eq("id", item.producto_id).single()
     await supabase.from("productos").update({ ultimo_costo: productoActual?.costo_actual ?? null, costo_actual: redondear(costoReal) }).eq("id", item.producto_id)
   }
