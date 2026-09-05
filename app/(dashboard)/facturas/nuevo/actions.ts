@@ -15,6 +15,7 @@ type ItemInput = {
   precio_neto?: number | null
   precio_final?: number | null
   subtotal_neto?: number | null
+  importe_linea?: number | null
   iva: number
   iva_importe?: number | null
   descuento?: number
@@ -140,10 +141,11 @@ export async function crearFactura(formData: FormData) {
 
   for (const item of itemsParaGuardar) {
     if (!item.producto_id || item.es_ajuste_negativo) continue
+    const importeLinea = numero((items.find((original) => original.producto_id === item.producto_id && original.cantidad === item.cantidad)?.importe_linea))
     const subtotalNeto = numero(item.subtotal_neto)
     const ivaImporte = numero(item.iva_importe)
     const internos = numero(item.impuestos_internos)
-    const totalProducto = subtotalNeto + ivaImporte + internos
+    const totalProducto = importeLinea > 0 ? importeLinea : subtotalNeto + ivaImporte + internos
     const costoReal = item.cantidad > 0 ? totalProducto / item.cantidad : 0
     if (costoReal <= 0) continue
     const { data: productoActual } = await supabase.from("productos").select("costo_actual").eq("id", item.producto_id).single()
