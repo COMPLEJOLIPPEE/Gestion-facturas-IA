@@ -37,27 +37,18 @@ type ItemInput = {
 
 function numero(valor: unknown) { const resultado = Number(valor ?? 0); return Number.isFinite(resultado) ? resultado : 0 }
 function redondear(valor: number) { return Number(valor.toFixed(2)) }
-function coincide(a: number, b: number) { return Math.abs(a - b) <= 0.50 }
 const EMPRESA_COOKIE = "factura_ia_empresa_activa"
 
-function calcularLinea(item: ItemInput) {
+function calcularControlLinea(item: ItemInput) {
   const cantidad = Math.max(0, numero(item.cantidad))
   const precioUnitario = numero(item.precio_unitario)
-  const bruto = cantidad * Math.abs(precioUnitario)
-  const ajuste = item.tipo_linea === "ajuste" || item.es_ajuste_negativo === true || precioUnitario < 0
-  const descuento = ajuste ? 0 : Math.abs(numero(item.descuento))
-  const bonificacion = ajuste ? 0 : Math.abs(numero(item.bonificacion))
-  const cargo = (item.cargos ?? []).reduce((s, c) => s + Math.abs(numero(c.importe)), 0)
   const subtotalExplicito = item.subtotal_neto != null && Number.isFinite(Number(item.subtotal_neto)) ? numero(item.subtotal_neto) : null
-  const subtotalNeto = ajuste
-    ? -(subtotalExplicito != null && subtotalExplicito !== 0 ? Math.abs(subtotalExplicito) : Math.abs(bruto))
-    : subtotalExplicito != null
-      ? Math.abs(subtotalExplicito)
-      : Math.max(0, bruto + cargo - descuento - bonificacion)
-  const ivaImporte = item.iva_importe != null && numero(item.iva_importe) !== 0 ? (ajuste ? -Math.abs(numero(item.iva_importe)) : Math.abs(numero(item.iva_importe))) : redondear(subtotalNeto * (numero(item.iva) / 100))
-  const impuestosInternos = ajuste ? -Math.abs(numero(item.impuestos_internos)) : Math.abs(numero(item.impuestos_internos))
-  const precioNetoUnitario = cantidad > 0 ? subtotalNeto / cantidad : precioUnitario
-  return { cantidad, precioUnitario, bruto, ajuste, descuento, bonificacion, cargo, subtotalNeto, ivaImporte, impuestosInternos, precioNetoUnitario }
+  const ivaExplicito = item.iva_importe != null && Number.isFinite(Number(item.iva_importe)) ? numero(item.iva_importe) : null
+  const ajuste = item.tipo_linea === "ajuste" || item.es_ajuste_negativo === true || precioUnitario < 0
+  const subtotal = subtotalExplicito ?? (ajuste ? -Math.abs(cantidad * precioUnitario) : Math.max(0, cantidad * Math.abs(precioUnitario)))
+  const iva = ivaExplicito ?? 0
+  const internos = ajuste ? -Math.abs(numero(item.impuestos_internos)) : Math.abs(numero(item.impuestos_internos))
+  return { cantidad, precioUnitario, subtotal, iva, internos }
 }
 
 export async function crearFactura(formData: FormData) {
@@ -83,26 +74,15 @@ export async function crearFactura(formData: FormData) {
   let cargos: CargoInput[] = []
   try { cargos = JSON.parse(String(formData.get("cargos") ?? "[]")) } catch { throw new Error("Los cargos de la factura no tienen un formato válido.") }
 
-  const cargosInternos = cargos.filter((cargo) => /impuestos?\s+internos?/i.test(cargo.descripcion))
-  const otrosCargos = cargos.filter((cargo) => !/impuestos?\s+internos?/i.test(cargo.descripcion))
-  const totalImpuestosInternosCargo = cargosInternos.reduce((acc, cargo) => acc + numero(cargo.importe), 0)
-  const totalOtrosCargos = otrosCargos.reduce((acc, cargo) => acc + numero(cargo.importe), 0)
+  const controles = items.map(calcularControlLinea)
+  const subtotalControl = redondear(controles.reduce((s, l) => s + l.subtotal, 0))
+  const ivaControl = redondear(controles.reduce((s, l) => s + l.iva, 0))
+  const internosControl = redondear(controles.reduce((s, l) => s + l.internos, 0))
+  const cargosControl = redondear(cargos.reduce((s, c) => s + numero(c.importe), 0))
+  const totalControl = redondear(subtotalControl + ivaControl + internosControl + cargosControl)
 
-  const resumen = items.reduce((acc, item) => {
-    const l = calcularLinea(item)
-    acc.subtotalBruto += l.bruto
-    acc.descuentos += l.descuento + l.bonificacion
-    acc.subtotalNeto += l.subtotalNeto
-    acc.iva += l.ivaImporte
-    acc.impuestosInternos += l.impuestosInternos
-    return acc
-  }, { subtotalBruto: 0, descuentos: 0, subtotalNeto: 0, iva: 0, impuestosInternos: 0 })
-
-  const subtotalCalculado = redondear(resumen.subtotalNeto)
-  const ivaCalculado = redondear(resumen.iva)
-  const impuestosInternos = redondear(resumen.impuestosInternos + totalImpuestosInternosCargo)
-  const totalCalculado = redondear(subtotalCalculado + ivaCalculado + impuestosInternos + totalOtrosCargos)
-
+  // Los totales oficiales extraídos por IA son la fuente de verdad.
+  // Los controles anteriores solo sirven para detectar diferencias y no bloquean el guardado.
   const iaSubtotal = formData.get("ia_subtotal_neto")
   const iaIva = formData.get("ia_iva_total")
   const iaTotal = formData.get("ia_total")
@@ -110,22 +90,22 @@ export async function crearFactura(formData: FormData) {
   const oficialIva = iaIva === null || iaIva === "" ? null : numero(iaIva)
   const oficialTotal = iaTotal === null || iaTotal === "" ? null : numero(iaTotal)
 
-  if (oficialSubtotal !== null && !coincide(subtotalCalculado, oficialSubtotal)) throw new Error(`La factura no coincide con el subtotal oficial del comprobante. Calculado: $${subtotalCalculado.toFixed(2)} / Oficial: $${oficialSubtotal.toFixed(2)}.`)
-  if (oficialIva !== null && !coincide(ivaCalculado, oficialIva)) throw new Error(`La factura no coincide con el IVA oficial del comprobante. Calculado: $${ivaCalculado.toFixed(2)} / Oficial: $${oficialIva.toFixed(2)}.`)
-  if (oficialTotal !== null && !coincide(totalCalculado, oficialTotal)) throw new Error(`La factura no coincide con el total oficial del comprobante. Calculado: $${totalCalculado.toFixed(2)} / Oficial: $${oficialTotal.toFixed(2)}.`)
+  const subtotal = oficialSubtotal !== null ? redondear(oficialSubtotal) : subtotalControl
+  const iva = oficialIva !== null ? redondear(oficialIva) : ivaControl
+  const total = oficialTotal !== null ? redondear(oficialTotal) : totalControl
+  const impuestosInternos = internosControl
+  const otrosCargos = cargosControl
+  const descuentoTotal = redondear(items.reduce((s, item) => s + Math.abs(numero(item.descuento)), 0) + items.reduce((s, item) => s + Math.abs(numero(item.bonificacion)), 0))
+  const subtotalBruto = redondear(controles.reduce((s, l) => s + Math.abs(l.cantidad * l.precioUnitario), 0))
 
-  const subtotal = oficialSubtotal !== null && coincide(subtotalCalculado, oficialSubtotal) ? redondear(oficialSubtotal) : subtotalCalculado
-  const iva = oficialIva !== null && coincide(ivaCalculado, oficialIva) ? redondear(oficialIva) : ivaCalculado
-  const total = oficialTotal !== null && coincide(totalCalculado, oficialTotal) ? redondear(oficialTotal) : totalCalculado
-
-  const { data: factura, error: errorFactura } = await supabase.from("facturas").insert({ numero: (formData.get("numero") as string) || null, fecha: formData.get("fecha") as string, fecha_vencimiento: (formData.get("fecha_vencimiento") as string) || null, proveedor_id: formData.get("proveedor_id") as string, empresa_id: empresaId, subtotal, descuento_total: redondear(resumen.descuentos), iva, impuestos_internos: redondear(impuestosInternos), otros_cargos: redondear(totalOtrosCargos), total, estado: "pendiente" }).select("id").single()
+  const { data: factura, error: errorFactura } = await supabase.from("facturas").insert({ numero: (formData.get("numero") as string) || null, fecha: formData.get("fecha") as string, fecha_vencimiento: (formData.get("fecha_vencimiento") as string) || null, proveedor_id: formData.get("proveedor_id") as string, empresa_id: empresaId, subtotal, subtotal_bruto: subtotalBruto, descuento_total: descuentoTotal, iva, impuestos_internos: impuestosInternos, otros_cargos: otrosCargos, total, estado: "pendiente" }).select("id").single()
   if (errorFactura || !factura) throw new Error(`Error creando factura: ${errorFactura?.message}`)
 
   const itemsParaGuardar = items.map((item) => {
-    const l = calcularLinea(item)
+    const l = calcularControlLinea(item)
     const descuentosDetalle: DescuentoDetalle[] = [...(item.descuentos ?? [])]
-    if (item.descuento_porcentaje != null) descuentosDetalle.push({ descripcion: "Descuento porcentual", porcentaje: Math.abs(numero(item.descuento_porcentaje)), importe: redondear(l.descuento) })
-    if (item.grupo_descuento) descuentosDetalle.push({ descripcion: item.grupo_descuento, importe: l.descuento })
+    if (item.descuento_porcentaje != null) descuentosDetalle.push({ descripcion: "Descuento porcentual", porcentaje: Math.abs(numero(item.descuento_porcentaje)), importe: null })
+    if (item.grupo_descuento) descuentosDetalle.push({ descripcion: item.grupo_descuento, importe: Math.abs(numero(item.descuento)) || null })
     return {
       factura_id: factura.id,
       producto_id: l.ajuste ? null : item.producto_id,
@@ -136,15 +116,15 @@ export async function crearFactura(formData: FormData) {
       precio_unitario: redondear(l.ajuste ? -Math.abs(l.precioUnitario) : Math.abs(l.precioUnitario)),
       iva: numero(item.iva),
       "alicuota IVA": numero(item.iva),
-      descuento: redondear(l.descuento),
-      precio_final: redondear(l.precioNetoUnitario),
-      precio_bruto_unitario: redondear(l.ajuste ? -Math.abs(l.precioUnitario) : Math.abs(l.precioUnitario)),
-      descuento_importe: redondear(l.descuento),
-      bonificacion_importe: redondear(l.bonificacion),
-      precio_neto_unitario: redondear(l.precioNetoUnitario),
-      subtotal_neto: redondear(l.subtotalNeto),
-      iva_importe: redondear(l.ivaImporte),
-      impuestos_internos: redondear(l.impuestosInternos),
+      descuento: redondear(l.ajuste ? 0 : Math.abs(numero(item.descuento))),
+      precio_final: item.precio_final != null ? redondear(numero(item.precio_final)) : null,
+      precio_bruto_unitario: item.precio_bruto_unitario != null ? redondear(l.ajuste ? -Math.abs(numero(item.precio_bruto_unitario)) : Math.abs(numero(item.precio_bruto_unitario))) : null,
+      descuento_importe: redondear(l.ajuste ? 0 : Math.abs(numero(item.descuento))),
+      bonificacion_importe: redondear(l.ajuste ? 0 : Math.abs(numero(item.bonificacion))),
+      precio_neto_unitario: item.precio_neto_unitario != null ? redondear(numero(item.precio_neto_unitario)) : null,
+      subtotal_neto: item.subtotal_neto != null ? redondear(l.ajuste ? -Math.abs(numero(item.subtotal_neto)) : Math.abs(numero(item.subtotal_neto))) : null,
+      iva_importe: item.iva_importe != null ? redondear(l.ajuste ? -Math.abs(numero(item.iva_importe)) : Math.abs(numero(item.iva_importe))) : null,
+      impuestos_internos: redondear(l.internos),
       descuentos_detalle: descuentosDetalle.length ? descuentosDetalle : null,
       bonificacion_tipo: item.tipo_bonificacion ?? null,
       cantidad_bonificada: numero(item.cantidad_bonificada ?? item.cantidad_bonificada_detalle) || null,
@@ -162,7 +142,14 @@ export async function crearFactura(formData: FormData) {
 
   for (const item of itemsParaGuardar) {
     if (!item.producto_id || item.es_ajuste_negativo) continue
-    const costoReal = item.cantidad > 0 ? numero(item.subtotal_neto) / item.cantidad : numero(item.precio_neto_unitario)
+    // Costo real del producto: importe de la línea con IVA e impuestos propios,
+    // dividido por la cantidad. Las percepciones/cargos generales quedan fuera.
+    const subtotalNeto = numero(item.subtotal_neto)
+    const ivaImporte = numero(item.iva_importe)
+    const internos = numero(item.impuestos_internos)
+    const totalProducto = subtotalNeto + ivaImporte + internos
+    const costoReal = item.cantidad > 0 ? totalProducto / item.cantidad : 0
+    if (costoReal <= 0) continue
     const { data: productoActual } = await supabase.from("productos").select("costo_actual").eq("id", item.producto_id).single()
     await supabase.from("productos").update({ ultimo_costo: productoActual?.costo_actual ?? null, costo_actual: redondear(costoReal) }).eq("id", item.producto_id)
   }
