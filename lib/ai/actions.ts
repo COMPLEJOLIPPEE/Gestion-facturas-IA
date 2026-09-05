@@ -43,37 +43,10 @@ function normalizarCargos(datos: ComprobanteExtraido): ComprobanteExtraido {
   return { ...datos, cargos }
 }
 
-function asegurarImpuestosInternosEnCargos(datosEntrada: ComprobanteExtraido): ComprobanteExtraido {
-  const datos = normalizarCargos(datosEntrada)
-  const importeTotal = Math.abs(numero(datos.impuestos_internos_total))
-  if (importeTotal <= 0) return datos
-
-  const cargosActuales = [...(datos.cargos ?? [])]
-  const esInterno = (descripcion: string) => {
-    const texto = normalizarTexto(descripcion)
-    return texto.includes("impuesto interno") || texto.includes("impuestos internos") || texto.includes("imp interno") || texto.includes("imp internos")
-  }
-  const yaExisteCargoInterno = cargosActuales.some((cargo) => esInterno(cargo.descripcion))
-  if (yaExisteCargoInterno) return datos
-
-  const impuestosPorLinea = (datos.lineas ?? []).reduce(
-    (suma, linea) => suma + Math.abs(numero(linea.impuestos_internos)),
-    0
-  )
-  const diferencia = importeTotal - impuestosPorLinea
-  if (impuestosPorLinea > 0 && diferencia <= 0.5) return datos
-
-  const importeCargo = impuestosPorLinea > 0 ? Math.max(0, diferencia) : importeTotal
-  if (importeCargo <= 0.01) return datos
-
-  cargosActuales.push({ descripcion: "Impuestos internos", importe: redondear(importeCargo) })
-  return { ...datos, cargos: cargosActuales }
-}
-
 export async function leerFacturaConIA(base64: string, mimeType: string): Promise<ComprobanteExtraido> {
   try {
     const datos = await extraerComprobante(base64, mimeType, "factura")
-    return asegurarImpuestosInternosEnCargos(datos)
+    return normalizarCargos(datos)
   } catch (error) {
     if (error instanceof GeminiFallbackRequiredError) throw new Error(`GEMINI_FALLBACK_REQUIRED|${error.logId ?? ""}|${error.message}`)
     throw error
@@ -83,7 +56,7 @@ export async function leerFacturaConIA(base64: string, mimeType: string): Promis
 export async function leerRemitoConIA(base64: string, mimeType: string): Promise<ComprobanteExtraido> {
   try {
     const datos = await extraerComprobante(base64, mimeType, "remito")
-    return asegurarImpuestosInternosEnCargos(datos)
+    return normalizarCargos(datos)
   } catch (error) {
     if (error instanceof GeminiFallbackRequiredError) throw new Error(`GEMINI_FALLBACK_REQUIRED|${error.logId ?? ""}|${error.message}`)
     throw error
@@ -104,10 +77,10 @@ export async function procesarLineasFacturaConIA(
 
 export async function usarGPTParaFactura(base64: string, mimeType: string, logId: string | null): Promise<ComprobanteExtraido> {
   const datos = await procesarConOpenAIAutorizado(base64, mimeType, "factura", logId)
-  return asegurarImpuestosInternosEnCargos(datos)
+  return normalizarCargos(datos)
 }
 
 export async function usarGPTParaRemito(base64: string, mimeType: string, logId: string | null): Promise<ComprobanteExtraido> {
   const datos = await procesarConOpenAIAutorizado(base64, mimeType, "remito", logId)
-  return asegurarImpuestosInternosEnCargos(datos)
+  return normalizarCargos(datos)
 }
