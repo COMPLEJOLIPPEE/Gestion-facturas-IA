@@ -6,7 +6,7 @@ export type LineaFactura = {
   producto_id: string; cantidad: number; precio_unitario: number; iva: number; descuento: number; precio_final: number
   descuento_porcentaje?: number; tipo_descuento?: "porcentaje" | "importe"
   bonificacion?: number; bonificacion_porcentaje?: number; cantidad_bonificada?: number; cantidad_bonificada_detalle?: number; tipo_bonificacion?: "cantidad" | "importe" | "porcentaje"
-  precio_bruto_unitario?: number; precio_neto?: number; subtotal_neto?: number; impuestos_internos?: number; iva_importe?: number
+  precio_bruto_unitario?: number; precio_neto?: number; precio_neto_unitario?: number; subtotal_neto?: number; impuestos_internos?: number; iva_importe?: number
   cargos?: CargoLinea[]; columnas_presentes?: string[]
   codigo_proveedor?: string; descripcion_proveedor?: string; descripcionLeida?: string; autoMatcheado?: boolean; score?: number
   confianza?: "alta" | "media" | "baja"; motivo?: string; aprendido?: boolean; fuente?: "alias" | "smartmatch" | "manual"
