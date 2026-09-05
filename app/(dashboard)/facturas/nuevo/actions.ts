@@ -12,6 +12,7 @@ type ItemInput = {
   producto_id: string
   cantidad: number
   precio_unitario: number
+  precio_bruto_unitario?: number | null
   precio_neto?: number | null
   precio_final?: number | null
   subtotal_neto?: number | null
