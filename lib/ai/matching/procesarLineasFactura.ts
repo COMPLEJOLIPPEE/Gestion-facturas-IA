@@ -81,10 +81,21 @@ function procesarValoresLeidos(linea: LineaExtraida, negativo: boolean) {
 function crearLineaAjuste(linea: LineaExtraida): LineaProcesada {
   const valores = procesarValoresLeidos(linea, true)
   return {
-    producto_id: "", cantidad: valores.cantidad || 1, precio_unitario: valores.precio_unitario, iva: numero(linea.iva), descuento: 0, precio_final: valores.precio_final,
-    ...valores, cargos: linea.cargos ?? [], columnas_presentes: linea.columnas_presentes ?? [], descripcionLeida: linea.descripcion,
-    autoMatcheado: false, score: 100, confianza: "alta", motivo: "Línea de ajuste/descuento conservada exactamente como fue extraída; no se asocia a ningún producto.", fuente: "manual",
-    codigo_proveedor: linea.codigo_proveedor ?? undefined, tipo_linea: "ajuste", es_ajuste_negativo: true,
+    producto_id: "",
+    ...valores,
+    cantidad: valores.cantidad || 1,
+    iva: numero(linea.iva),
+    cargos: linea.cargos ?? [],
+    columnas_presentes: linea.columnas_presentes ?? [],
+    descripcionLeida: linea.descripcion,
+    autoMatcheado: false,
+    score: 100,
+    confianza: "alta",
+    motivo: "Línea de ajuste/descuento conservada exactamente como fue extraída; no se asocia a ningún producto.",
+    fuente: "manual",
+    codigo_proveedor: linea.codigo_proveedor ?? undefined,
+    tipo_linea: "ajuste",
+    es_ajuste_negativo: true,
   }
 }
 
@@ -100,9 +111,14 @@ export async function procesarLineasFacturaIA(supabase: SupabaseClient, proveedo
 
     const valores = procesarValoresLeidos(linea, false)
     const base = {
-      cantidad: valores.cantidad, precio_unitario: valores.precio_unitario, iva: numero(linea.iva ?? 0),
-      precio_final: valores.precio_final, ...valores, cargos: linea.cargos ?? [], columnas_presentes: linea.columnas_presentes ?? [], descripcionLeida: linea.descripcion,
-      codigo_proveedor: linea.codigo_proveedor ?? undefined, tipo_linea: "producto" as const, es_ajuste_negativo: false,
+      ...valores,
+      iva: numero(linea.iva ?? 0),
+      cargos: linea.cargos ?? [],
+      columnas_presentes: linea.columnas_presentes ?? [],
+      descripcionLeida: linea.descripcion,
+      codigo_proveedor: linea.codigo_proveedor ?? undefined,
+      tipo_linea: "producto" as const,
+      es_ajuste_negativo: false,
     }
 
     const alias = proveedorId ? await buscarAlias(supabase, proveedorId, linea.descripcion, linea.codigo_proveedor) : null
