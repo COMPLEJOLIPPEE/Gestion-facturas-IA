@@ -49,7 +49,7 @@ export function FacturaForm({ proveedores, empresas, empresaActivaId, productos,
 
   const agregarLinea = () => setLineas((prev) => [...prev, { producto_id: "", cantidad: 1, precio_unitario: 0, iva: 21, descuento: 0, precio_final: 0, precio_neto: 0, subtotal_neto: 0, impuestos_internos: 0, iva_importe: 0, bonificacion: 0, cantidad_bonificada: 0 }])
   const quitarLinea = (index: number) => setLineas((prev) => prev.filter((_, i) => i !== index))
-  const actualizarLinea = (index: number, campo: keyof LineaFactura, valor: string | number) => setLineas((prev) => prev.map((linea, i) => i === index ? { ...linea, [campo]: valor } : linea))
+const actualizarLinea = (index: number, campo: keyof LineaFactura, valor: string | number | boolean) => setLineas((prev) => prev.map((linea, i) => i === index ? { ...linea, [campo]: valor } : linea))
   const actualizarProductoDeLinea = (index: number, productoId: string) => setLineas((prev) => prev.map((linea, i) => i === index ? { ...linea, producto_id: productoId } : linea))
 
   const crearProductoDesdeLinea = async (index: number, nombre: string, costo: number, iva: number) => {
