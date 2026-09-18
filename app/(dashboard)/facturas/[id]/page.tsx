@@ -22,6 +22,7 @@ export default async function FacturaDetallePage({ params }: Props) {
       fecha_vencimiento,
       subtotal,
       iva,
+      impuestos_internos,
       total,
       estado,
       proveedores (nombre_fantasia),
@@ -127,6 +128,10 @@ export default async function FacturaDetallePage({ params }: Props) {
             <div className="flex justify-between">
               <span className="text-gray-500">IVA</span>
               <span>${Number(factura.iva ?? 0).toLocaleString("es-AR")}</span>
+            </div>
+            <div className="flex justify-between">
+              <span className="text-gray-500">Impuestos internos</span>
+              <span>${Number(factura.impuestos_internos ?? 0).toLocaleString("es-AR")}</span>
             </div>
             <div className="flex justify-between font-semibold">
               <span>Total</span>
