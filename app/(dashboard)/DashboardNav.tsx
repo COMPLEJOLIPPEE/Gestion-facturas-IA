@@ -11,6 +11,7 @@ const MENU = [
   { href: "/facturas", label: "Facturas", icon: "📄" },
   { href: "/remitos", label: "Remitos", icon: "📝" },
   { href: "/pagos", label: "Pagos", icon: "💰" },
+  { href: "/empleados", label: "Empleados", icon: "👥" },
 ];
 
 type Empresa = { id: string; razon_social: string };
