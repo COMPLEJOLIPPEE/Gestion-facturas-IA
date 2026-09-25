@@ -7,7 +7,8 @@ import DatosComprobante from "./components/DatosComprobante"
 import ProductosFactura, { LineaFactura } from "./components/ProductosFactura"
 import ImpuestosFactura from "./components/ImpuestosFactura"
 import PagoFactura from "./components/PagoFactura"
-import { leerFacturaConIA, procesarLineasFacturaConIA, usarGPTParaFactura } from "@/lib/ai/actions"
+import { procesarLineasFacturaConIA } from "@/lib/ai/actions"
+import type { ComprobanteExtraido } from "@/lib/ai/tipos"
 
 type Proveedor = { id: string; nombre_fantasia: string }
 type Empresa = { id: string; razon_social: string }
@@ -41,7 +42,8 @@ export function FacturaForm({ proveedores, empresas, empresaActivaId, productos,
   const [fechaVencimiento, setFechaVencimiento] = useState("")
   const [leyendoIA, setLeyendoIA] = useState(false)
   const [errorIA, setErrorIA] = useState<string | null>(null)
-  const [fallbackIA, setFallbackIA] = useState<{ base64: string; mimeType: string; logId: string | null; mensaje: string } | null>(null)
+  const [fallbackIA, setFallbackIA] = useState<{ mimeType: string; logId: string | null; mensaje: string } | null>(null)
+  const archivoIARef = useRef<File | null>(null)
   const inputArchivoRef = useRef<HTMLInputElement>(null)
   const [pagarAlCargar, setPagarAlCargar] = useState(false)
   const [montoPago, setMontoPago] = useState(0)
@@ -101,9 +103,30 @@ const actualizarLinea = (index: number, campo: keyof LineaFactura, valor: string
   }, [lineas, cargos])
 
   const montoPagoMostrado = pagoTocado ? redondear(montoPago) : calculo.total
-  const archivoABase64 = (file: File): Promise<string> => new Promise((resolve, reject) => { const reader = new FileReader(); reader.onload = () => { const resultado = reader.result as string; resolve(resultado.split(",")[1] ?? "") }; reader.onerror = reject; reader.readAsDataURL(file) })
+  async function procesarArchivoIA(file: File, provider: "gemini" | "openai", logId?: string | null): Promise<ComprobanteExtraido> {
+    const formData = new FormData()
+    formData.set("file", file)
+    formData.set("provider", provider)
+    if (logId) formData.set("logId", logId)
 
-  async function aplicarDatosFacturaIA(datos: Awaited<ReturnType<typeof leerFacturaConIA>>) {
+    const response = await fetch("/api/ia/factura", {
+      method: "POST",
+      body: formData,
+    })
+
+    const resultado = await response.json()
+
+    if (!response.ok) {
+      if (resultado.code === "GEMINI_FALLBACK_REQUIRED") {
+        throw new Error(`GEMINI_FALLBACK_REQUIRED|${resultado.logId ?? ""}|${resultado.message ?? "Gemini no pudo procesar el documento."}`)
+      }
+      throw new Error(resultado.error ?? "No se pudo procesar la factura.")
+    }
+
+    return resultado as ComprobanteExtraido
+  }
+
+  async function aplicarDatosFacturaIA(datos: ComprobanteExtraido) {
     setCargos((datos.cargos ?? []).map((cargo) => ({ descripcion: cargo.descripcion, importe: Math.abs(numero(cargo.importe)) })))
     if (datos.numero) setNumeroFactura(datos.numero)
     if (datos.fecha) setFecha(datos.fecha)
@@ -121,22 +144,30 @@ const actualizarLinea = (index: number, campo: keyof LineaFactura, valor: string
   }
 
   async function manejarArchivoIA(file: File) {
-    setLeyendoIA(true); setErrorIA(null); setFallbackIA(null)
-    try { const base64 = await archivoABase64(file); const datos = await leerFacturaConIA(base64, file.type); await aplicarDatosFacturaIA(datos) }
-    catch (error) {
+    setLeyendoIA(true); setErrorIA(null); setFallbackIA(null); archivoIARef.current = file
+    try {
+      const datos = await procesarArchivoIA(file, "gemini")
+      await aplicarDatosFacturaIA(datos)
+    } catch (error) {
       const mensaje = error instanceof Error ? error.message : "No se pudo leer la factura."
       if (mensaje.startsWith("GEMINI_FALLBACK_REQUIRED|")) {
-        const partes = mensaje.split("|"); const logId = partes[1] || null; const motivo = partes.slice(2).join("|") || "Gemini no pudo procesar el documento."
-        try { const base64 = await archivoABase64(file); setFallbackIA({ base64, mimeType: file.type, logId, mensaje: motivo }); setErrorIA(null) } catch { setErrorIA("No se pudo preparar el documento para el procesamiento alternativo.") }
+        const partes = mensaje.split("|")
+        const logId = partes[1] || null
+        const motivo = partes.slice(2).join("|") || "Gemini no pudo procesar el documento."
+        setFallbackIA({ mimeType: file.type, logId, mensaje: motivo })
+        setErrorIA(null)
       } else setErrorIA(mensaje)
     } finally { setLeyendoIA(false); if (inputArchivoRef.current) inputArchivoRef.current.value = "" }
   }
 
   async function autorizarGPT() {
-    if (!fallbackIA) return
+    if (!fallbackIA || !archivoIARef.current) return
     setLeyendoIA(true); setErrorIA(null)
-    try { const datos = await usarGPTParaFactura(fallbackIA.base64, fallbackIA.mimeType, fallbackIA.logId); await aplicarDatosFacturaIA(datos); setFallbackIA(null) }
-    catch (error) { setErrorIA(error instanceof Error ? error.message : "No se pudo procesar el documento con GPT-4o-mini.") }
+    try {
+      const datos = await procesarArchivoIA(archivoIARef.current, "openai", fallbackIA.logId)
+      await aplicarDatosFacturaIA(datos)
+      setFallbackIA(null)
+    } catch (error) { setErrorIA(error instanceof Error ? error.message : "No se pudo procesar el documento con GPT-4o-mini.") }
     finally { setLeyendoIA(false) }
   }
 
