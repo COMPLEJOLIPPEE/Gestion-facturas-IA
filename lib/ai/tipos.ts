@@ -41,6 +41,7 @@ export type LineaExtraida = {
 
 export type ComprobanteExtraido = {
   proveedor_nombre: string | null
+  empresa_receptora_nombre: string | null
   numero: string | null
   fecha: string | null
   fecha_vencimiento: string | null
