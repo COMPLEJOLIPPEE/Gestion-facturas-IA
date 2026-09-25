@@ -28,6 +28,14 @@ function dinero(valor: number) { return valor.toLocaleString("es-AR", { minimumF
 function porcentaje(valor: number) { return `${valor.toLocaleString("es-AR", { minimumFractionDigits: 0, maximumFractionDigits: 2 })}%` }
 function numero(valor: unknown) { const n = Number(valor ?? 0); return Number.isFinite(n) ? n : 0 }
 
+function normalizarColumnas(lineas: LineaFactura[]) {
+  const columnasIA = lineas.find((l) => l.columnas_presentes?.length)?.columnas_presentes
+  const columnasBase = columnasIA?.length ? columnasIA : columnasFallback(lineas)
+  const columnas = columnasBase.map((col) => col === "articulo" ? "descripcion" : col)
+  if (!columnas.includes("descripcion")) columnas.unshift("descripcion")
+  return Array.from(new Set(columnas))
+}
+
 function columnasFallback(lineas: LineaFactura[]) {
   const columnas = new Set<string>(["descripcion", "cantidad", "precio_unitario"])
   for (const l of lineas) {
@@ -46,7 +54,7 @@ function columnasFallback(lineas: LineaFactura[]) {
 }
 
 export default function ProductosFactura({ productos, lineas, agregarLinea, quitarLinea, actualizarLinea, actualizarProductoDeLinea, crearProductoDesdeLinea }: Props) {
-  const columnas = lineas.find((l) => l.columnas_presentes?.length)?.columnas_presentes ?? columnasFallback(lineas)
+  const columnas = normalizarColumnas(lineas)
   const tiene = (clave: string) => columnas.includes(clave)
   const tasasIVA = Array.from(new Set(lineas.filter((l) => l.tipo_linea !== "ajuste" && !l.es_ajuste_negativo).map((l) => numero(l.iva)).filter((v) => v >= 0)))
   const ivaUnicoOculto = !tiene("iva") && tasasIVA.length === 1

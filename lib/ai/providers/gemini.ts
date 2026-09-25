@@ -135,6 +135,12 @@ Si un dato no aparece, devolvé null.
 ==================================================
 IMPORTES DE CADA LÍNEA
 ==================================================
+DESCRIPCIÓN OBLIGATORIA:
+- Para CADA fila comercial visible, descripción es OBLIGATORIA.
+- Copiá literalmente el texto visible de la columna ARTÍCULO/DESCRIPCIÓN, aunque tenga abreviaturas, errores OCR o formato poco claro.
+- Nunca devuelvas descripcion vacía, cadena vacía o null.
+- Si el texto no se puede leer completamente, devolvé la parte legible en lugar de dejarla vacía.
+
 Para cada línea identificá, SOLO SI ESTÁ IMPRESO:
 descripción, código del proveedor, cantidad, precio unitario, precio bruto unitario,
 descuentos, bonificaciones, precio neto, precio neto unitario, IVA, importe de IVA,
