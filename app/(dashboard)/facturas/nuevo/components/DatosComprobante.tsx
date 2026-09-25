@@ -1,6 +1,6 @@
 "use client";
 
-type Proveedor = { id: string; nombre_fantasia: string };
+type Proveedor = { id: string; nombre_fantasia: string; razon_social: string | null };
 type Empresa = { id: string; razon_social: string };
 
 type Props = {
@@ -41,7 +41,7 @@ export default function DatosComprobante({
           <label className="mb-1 block text-sm font-medium text-gray-600">Proveedor *</label>
           <select name="proveedor_id" value={proveedorId} onChange={(e) => setProveedorId(e.target.value)} required className="w-full rounded-lg border border-gray-300 p-2">
             <option value="">Seleccionar proveedor</option>
-            {proveedores.map((proveedor) => <option key={proveedor.id} value={proveedor.id}>{proveedor.nombre_fantasia}</option>)}
+            {proveedores.map((proveedor) => { const razonSocial = proveedor.razon_social?.trim(); const alias = proveedor.nombre_fantasia?.trim(); const etiqueta = razonSocial && alias && razonSocial !== alias ? `${razonSocial} - ${alias}` : razonSocial || alias; return <option key={proveedor.id} value={proveedor.id}>{etiqueta}</option> })}
           </select>
         </div>
 
