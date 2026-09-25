@@ -105,6 +105,8 @@ function procesarValoresLeidos(linea: LineaExtraida): Omit<LineaProcesada, "prod
 
 function crearLineaAjuste(linea: LineaExtraida): LineaProcesada {
   const valores = procesarValoresLeidos(linea)
+  const descripcion = normalizarDescripcion(linea.descripcion)
+
   return {
     producto_id: "",
     ...valores,
@@ -137,9 +139,10 @@ export async function procesarLineasFacturaIA(
       continue
     }
 
+    const descripcion = normalizarDescripcion(linea.descripcion)
     const base = {
       ...procesarValoresLeidos(linea),
-      descripcionLeida: linea.descripcion,
+      descripcionLeida: descripcion,
       codigo_proveedor: linea.codigo_proveedor ?? undefined,
       tipo_linea: "producto" as const,
       es_ajuste_negativo: false,
