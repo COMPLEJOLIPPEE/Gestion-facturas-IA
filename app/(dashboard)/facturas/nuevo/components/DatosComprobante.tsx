@@ -6,7 +6,8 @@ type Empresa = { id: string; razon_social: string };
 type Props = {
   proveedores: Proveedor[];
   empresas: Empresa[];
-  empresaActivaId: string | null;
+  empresaId: string;
+  setEmpresaId: (value: string) => void;
   proveedorId: string;
   setProveedorId: (value: string) => void;
   numero: string;
@@ -20,7 +21,8 @@ type Props = {
 export default function DatosComprobante({
   proveedores,
   empresas,
-  empresaActivaId,
+  empresaId,
+  setEmpresaId,
   proveedorId,
   setProveedorId,
   numero,
@@ -30,7 +32,6 @@ export default function DatosComprobante({
   fechaVencimiento,
   setFechaVencimiento,
 }: Props) {
-  const empresaActiva = empresas.find((empresa) => empresa.id === empresaActivaId);
 
   return (
     <div className="rounded-xl bg-white p-6 shadow">
@@ -46,10 +47,11 @@ export default function DatosComprobante({
         </div>
 
         <div>
-          <label className="mb-1 block text-sm font-medium text-gray-600">Empresa activa *</label>
-          <div className="flex min-h-10 items-center rounded-lg border border-gray-200 bg-gray-50 px-3 text-sm font-medium text-gray-800">
-            {empresaActiva?.razon_social ?? "Seleccioná una empresa desde el menú lateral"}
-          </div>
+          <label className="mb-1 block text-sm font-medium text-gray-600">Empresa *</label>
+          <select name="empresa_id" value={empresaId} onChange={(e) => setEmpresaId(e.target.value)} required className="w-full rounded-lg border border-gray-300 p-2">
+            <option value="">Seleccionar empresa</option>
+            {empresas.map((empresa) => <option key={empresa.id} value={empresa.id}>{empresa.razon_social}</option>)}
+          </select>
         </div>
 
         <div>
