@@ -109,8 +109,7 @@ export default function ProveedoresTable({
         <table className="w-full min-w-[900px]">
           <thead className="bg-gray-100">
             <tr>
-              <th className="p-3 text-left text-sm">Nombre fantasía</th>
-              <th className="p-3 text-left text-sm">Razón social</th>
+              <th className="p-3 text-left text-sm">Proveedor</th>
               <th className="p-3 text-left text-sm">Categoría</th>
               <th className="p-3 text-left text-sm">Etiquetas</th>
               <th className="p-3 text-center text-sm">Estado</th>
@@ -122,8 +121,12 @@ export default function ProveedoresTable({
               <tr><td colSpan={6} className="p-10 text-center text-sm text-gray-500">No se encontraron proveedores con estos filtros.</td></tr>
             ) : proveedores.map((p) => (
               <tr key={p.id} className="border-t hover:bg-gray-50">
-                <td className="p-3 text-sm">{p.nombre_fantasia}</td>
-                <td className="p-3 text-sm">{p.razon_social}</td>
+                <td className="p-3 text-sm">
+                  <div className="font-medium text-gray-900">{p.razon_social || p.nombre_fantasia}</div>
+                  {p.razon_social && p.nombre_fantasia && p.razon_social !== p.nombre_fantasia && (
+                    <div className="text-xs text-gray-500">Alias: {p.nombre_fantasia}</div>
+                  )}
+                </td>
                 <td className="p-3 text-sm"><Badge variant="secondary">{p.categoria_nombre ?? "Sin categoría"}</Badge></td>
                 <td className="p-3 text-sm"><div className="space-y-1">{p.etiqueta_1 && <Badge variant="info">{p.etiqueta_1}</Badge>}{p.etiqueta_2 && <Badge variant="secondary">{p.etiqueta_2}</Badge>}{!p.etiqueta_1 && !p.etiqueta_2 && <span className="text-gray-400">—</span>}</div></td>
                 <td className="p-3 text-center"><Badge variant={p.activo ? "success" : "danger"}>{p.activo ? "Activo" : "Inactivo"}</Badge></td>
