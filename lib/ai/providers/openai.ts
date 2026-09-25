@@ -36,7 +36,7 @@ const openAISchema = {
       },
     },
   },
-  required: ["proveedor_nombre", "numero", "fecha", "fecha_vencimiento", "subtotal_bruto", "descuento_total", "subtotal_neto", "iva_total", "impuestos_internos_total", "percepciones", "otros_cargos", "cargos", "total", "lineas"],
+  required: ["proveedor_nombre", "empresa_receptora_nombre", "numero", "fecha", "fecha_vencimiento", "subtotal_bruto", "descuento_total", "subtotal_neto", "iva_total", "impuestos_internos_total", "percepciones", "otros_cargos", "cargos", "total", "lineas"],
   additionalProperties: false,
 };
 
