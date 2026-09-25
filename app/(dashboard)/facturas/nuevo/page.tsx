@@ -17,7 +17,7 @@ export default async function NuevaFacturaPage() {
     { data: productos },
     { data: formasPago },
   ] = await Promise.all([
-    supabase.from("proveedores").select("id, nombre_fantasia").order("nombre_fantasia"),
+    supabase.from("proveedores").select("id, nombre_fantasia, razon_social").order("nombre_fantasia"),
     supabase.from("empresas").select("id, razon_social").order("razon_social"),
     supabase.from("productos").select("id, nombre, codigo").order("nombre"),
     supabase.from("formas_pago").select("id, nombre").order("nombre"),
