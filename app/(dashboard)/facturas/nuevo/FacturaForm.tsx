@@ -132,7 +132,6 @@ const actualizarLinea = (index: number, campo: keyof LineaFactura, valor: string
     if (datos.numero) setNumeroFactura(datos.numero)
     if (datos.fecha) setFecha(datos.fecha)
     if (datos.fecha_vencimiento) setFechaVencimiento(datos.fecha_vencimiento)
-    let empresaDetectadaId = empresaId
     if (datos.empresa_receptora_nombre) {
       const nombreIA = datos.empresa_receptora_nombre.toLowerCase().replace(/\s+/g, " ").trim()
       const empresaEncontrada = empresas.find((empresa) => {
@@ -140,7 +139,6 @@ const actualizarLinea = (index: number, campo: keyof LineaFactura, valor: string
         return razonSocial === nombreIA || razonSocial.includes(nombreIA) || nombreIA.includes(razonSocial)
       })
       if (empresaEncontrada) {
-        empresaDetectadaId = empresaEncontrada.id
         setEmpresaId(empresaEncontrada.id)
       }
     }
