@@ -10,7 +10,7 @@ import PagoFactura from "./components/PagoFactura"
 import { procesarLineasFacturaConIA } from "@/lib/ai/actions"
 import type { ComprobanteExtraido } from "@/lib/ai/tipos"
 
-type Proveedor = { id: string; nombre_fantasia: string }
+type Proveedor = { id: string; nombre_fantasia: string; razon_social: string | null }
 type Empresa = { id: string; razon_social: string }
 type Producto = { id: string; nombre: string; codigo: string | null }
 type FormaPago = { id: string; nombre: string }
@@ -134,7 +134,7 @@ const actualizarLinea = (index: number, campo: keyof LineaFactura, valor: string
     let proveedorDetectadoId = proveedorId
     if (datos.proveedor_nombre) {
       const nombreIA = datos.proveedor_nombre.toLowerCase().trim()
-      const proveedorEncontrado = proveedores.find((proveedor) => { const nombreProveedor = proveedor.nombre_fantasia.toLowerCase().trim(); return nombreProveedor.includes(nombreIA) || nombreIA.includes(nombreProveedor) })
+      const proveedorEncontrado = proveedores.find((proveedor) => { const alias = proveedor.nombre_fantasia.toLowerCase().trim(); const razonSocial = (proveedor.razon_social ?? "").toLowerCase().trim(); return alias.includes(nombreIA) || nombreIA.includes(alias) || (razonSocial && (razonSocial.includes(nombreIA) || nombreIA.includes(razonSocial))) })
       if (proveedorEncontrado) { proveedorDetectadoId = proveedorEncontrado.id; setProveedorId(proveedorEncontrado.id) }
     }
     if (datos.lineas.length > 0) {
