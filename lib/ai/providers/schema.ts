@@ -21,6 +21,7 @@ export const schema = {
   type: Type.OBJECT,
   properties: {
     proveedor_nombre: { type: Type.STRING, nullable: true },
+    empresa_receptora_nombre: { type: Type.STRING, nullable: true },
     numero: { type: Type.STRING, nullable: true },
     fecha: { type: Type.STRING, nullable: true },
     fecha_vencimiento: { type: Type.STRING, nullable: true },

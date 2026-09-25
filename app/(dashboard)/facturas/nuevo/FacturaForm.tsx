@@ -37,6 +37,7 @@ export function FacturaForm({ proveedores, empresas, empresaActivaId, productos,
   const [productosDisponibles, setProductosDisponibles] = useState<Producto[]>(productos)
   const [cargos, setCargos] = useState<{ descripcion: string; importe: number }[]>([])
   const [proveedorId, setProveedorId] = useState("")
+  const [empresaId, setEmpresaId] = useState(empresaActivaId ?? "")
   const [numeroFactura, setNumeroFactura] = useState("")
   const [fecha, setFecha] = useState("")
   const [fechaVencimiento, setFechaVencimiento] = useState("")
@@ -131,6 +132,17 @@ const actualizarLinea = (index: number, campo: keyof LineaFactura, valor: string
     if (datos.numero) setNumeroFactura(datos.numero)
     if (datos.fecha) setFecha(datos.fecha)
     if (datos.fecha_vencimiento) setFechaVencimiento(datos.fecha_vencimiento)
+    if (datos.empresa_receptora_nombre) {
+      const nombreIA = datos.empresa_receptora_nombre.toLowerCase().replace(/\s+/g, " ").trim()
+      const empresaEncontrada = empresas.find((empresa) => {
+        const razonSocial = empresa.razon_social.toLowerCase().replace(/\s+/g, " ").trim()
+        return razonSocial === nombreIA || razonSocial.includes(nombreIA) || nombreIA.includes(razonSocial)
+      })
+      if (empresaEncontrada) {
+        setEmpresaId(empresaEncontrada.id)
+      }
+    }
+
     let proveedorDetectadoId = proveedorId
     if (datos.proveedor_nombre) {
       const nombreIA = datos.proveedor_nombre.toLowerCase().trim()
@@ -173,7 +185,6 @@ const actualizarLinea = (index: number, campo: keyof LineaFactura, valor: string
 
   return (
     <form action={crearFactura} className="space-y-6">
-      <input type="hidden" name="empresa_id" value={empresaActivaId ?? ""} />
       <input type="hidden" name="items" value={JSON.stringify(calculo.lineas)} />
       <input type="hidden" name="subtotal" value={calculo.subtotalNeto} />
       <input type="hidden" name="iva" value={calculo.iva} />
@@ -188,11 +199,11 @@ const actualizarLinea = (index: number, campo: keyof LineaFactura, valor: string
           <div className="flex gap-3"><button type="button" onClick={autorizarGPT} disabled={leyendoIA} className="rounded-lg bg-amber-600 px-4 py-2 text-sm font-medium text-white hover:bg-amber-700 disabled:cursor-not-allowed disabled:opacity-50">{leyendoIA ? "Procesando con GPT..." : "Usar GPT-4o-mini"}</button><button type="button" onClick={() => { setFallbackIA(null); setErrorIA(null) }} disabled={leyendoIA} className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:cursor-not-allowed disabled:opacity-50">Cancelar</button></div>
         </div>
       )}
-      <DatosComprobante proveedores={proveedores} empresas={empresas} empresaActivaId={empresaActivaId} proveedorId={proveedorId} setProveedorId={setProveedorId} numero={numeroFactura} setNumero={setNumeroFactura} fecha={fecha} setFecha={setFecha} fechaVencimiento={fechaVencimiento} setFechaVencimiento={setFechaVencimiento} />
+      <DatosComprobante proveedores={proveedores} empresas={empresas} empresaId={empresaId} setEmpresaId={setEmpresaId} proveedorId={proveedorId} setProveedorId={setProveedorId} numero={numeroFactura} setNumero={setNumeroFactura} fecha={fecha} setFecha={setFecha} fechaVencimiento={fechaVencimiento} setFechaVencimiento={setFechaVencimiento} />
       <ProductosFactura productos={productosDisponibles} lineas={calculo.lineas} agregarLinea={agregarLinea} quitarLinea={quitarLinea} actualizarLinea={actualizarLinea} actualizarProductoDeLinea={actualizarProductoDeLinea} crearProductoDesdeLinea={crearProductoDesdeLinea} />
       <ImpuestosFactura subtotal={calculo.subtotalNeto} descuentos={calculo.descuentos} iva={calculo.iva} impuestosInternos={calculo.impuestosInternos} cargos={cargos} total={calculo.total} />
       <PagoFactura pagarAlCargar={pagarAlCargar} setPagarAlCargar={setPagarAlCargar} montoPagoMostrado={montoPagoMostrado} setMontoPago={setMontoPago} setPagoTocado={setPagoTocado} total={calculo.total} formasPago={formasPago} />
-      <button type="submit" disabled={lineas.length === 0 || !empresaActivaId} className="rounded-lg bg-black px-5 py-2 text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">Guardar factura</button>
+      <button type="submit" disabled={lineas.length === 0 || !empresaId} className="rounded-lg bg-black px-5 py-2 text-white hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50">Guardar factura</button>
     </form>
   )
 }

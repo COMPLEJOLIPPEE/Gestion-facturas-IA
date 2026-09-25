@@ -119,6 +119,12 @@ ${REGLAS_DESCUENTOS}
 ==================================================
 DATOS GENERALES Y TOTALES OFICIALES
 ==================================================
+DATOS DEL RECEPTOR:
+- Identificá la razón social del receptor/comprador de la factura.
+- Devolvela en empresa_receptora_nombre.
+- No confundas la empresa receptora con el proveedor/emisor.
+- Si no puede leerse con seguridad, devolvé null.
+
 Identificá y LEÉ literalmente los importes impresos del pie/resumen:
 - subtotal bruto
 - descuento total

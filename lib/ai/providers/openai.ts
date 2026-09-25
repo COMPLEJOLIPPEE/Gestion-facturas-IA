@@ -14,7 +14,7 @@ const cargoSchema = {
 const openAISchema = {
   type: "object",
   properties: {
-    proveedor_nombre: { type: ["string", "null"] }, numero: { type: ["string", "null"] }, fecha: { type: ["string", "null"] }, fecha_vencimiento: { type: ["string", "null"] },
+    proveedor_nombre: { type: ["string", "null"] }, empresa_receptora_nombre: { type: ["string", "null"] }, numero: { type: ["string", "null"] }, fecha: { type: ["string", "null"] }, fecha_vencimiento: { type: ["string", "null"] },
     subtotal_bruto: { type: ["number", "null"] }, descuento_total: { type: ["number", "null"] }, subtotal_neto: { type: ["number", "null"] }, iva_total: { type: ["number", "null"] }, impuestos_internos_total: { type: ["number", "null"] },
     percepciones: cargoSchema, otros_cargos: cargoSchema, cargos: cargoSchema, total: { type: ["number", "null"] },
     lineas: {
@@ -36,7 +36,7 @@ const openAISchema = {
       },
     },
   },
-  required: ["proveedor_nombre", "numero", "fecha", "fecha_vencimiento", "subtotal_bruto", "descuento_total", "subtotal_neto", "iva_total", "impuestos_internos_total", "percepciones", "otros_cargos", "cargos", "total", "lineas"],
+  required: ["proveedor_nombre", "empresa_receptora_nombre", "numero", "fecha", "fecha_vencimiento", "subtotal_bruto", "descuento_total", "subtotal_neto", "iva_total", "impuestos_internos_total", "percepciones", "otros_cargos", "cargos", "total", "lineas"],
   additionalProperties: false,
 };
 
@@ -99,6 +99,9 @@ En columnas_presentes devolvé SOLO las columnas que realmente aparecen en la ta
 Si una columna existe aunque sus valores sean 0, incluila. Si no existe, no la inventes.
 
 DATOS GENERALES:
+- proveedor_nombre = razón social/nombre del EMISOR de la factura.
+- empresa_receptora_nombre = razón social del RECEPTOR/COMPRADOR, normalmente identificada junto a "Señor(es)", "Cliente", "Razón social", "Domicilio" o datos fiscales del comprador.
+- No confundas emisor/proveedor con receptor/empresa compradora.
 Leé literalmente proveedor, número, fechas, subtotal bruto, descuento total, subtotal neto, IVA total, impuestos internos total, percepciones, otros cargos y total final.
 No calcules ningún dato faltante a partir de otros.
 
