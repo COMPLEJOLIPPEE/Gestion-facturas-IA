@@ -99,6 +99,9 @@ En columnas_presentes devolvé SOLO las columnas que realmente aparecen en la ta
 Si una columna existe aunque sus valores sean 0, incluila. Si no existe, no la inventes.
 
 DATOS GENERALES:
+- proveedor_nombre = razón social/nombre del EMISOR de la factura.
+- empresa_receptora_nombre = razón social del RECEPTOR/COMPRADOR, normalmente identificada junto a "Señor(es)", "Cliente", "Razón social", "Domicilio" o datos fiscales del comprador.
+- No confundas emisor/proveedor con receptor/empresa compradora.
 Leé literalmente proveedor, número, fechas, subtotal bruto, descuento total, subtotal neto, IVA total, impuestos internos total, percepciones, otros cargos y total final.
 No calcules ningún dato faltante a partir de otros.
 
