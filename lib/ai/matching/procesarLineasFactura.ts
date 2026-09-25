@@ -43,6 +43,12 @@ export type LineaProcesada = {
   es_ajuste_negativo?: boolean
 }
 
+function normalizarDescripcion(valor: unknown) {
+  return String(valor ?? "")
+    .replace(/\s+/g, " ")
+    .trim()
+}
+
 function numero(valor: unknown) {
   const n = Number(valor ?? 0)
   return Number.isFinite(n) ? n : 0
@@ -103,7 +109,7 @@ function crearLineaAjuste(linea: LineaExtraida): LineaProcesada {
     producto_id: "",
     ...valores,
     cantidad: valores.cantidad || 1,
-    descripcionLeida: linea.descripcion,
+    descripcionLeida: descripcion,
     autoMatcheado: false,
     score: 100,
     confianza: "alta",
@@ -139,13 +145,13 @@ export async function procesarLineasFacturaIA(
       es_ajuste_negativo: false,
     }
 
-    const alias = proveedorId ? await buscarAlias(supabase, proveedorId, linea.descripcion, linea.codigo_proveedor) : null
+    const alias = proveedorId && descripcion ? await buscarAlias(supabase, proveedorId, descripcion, linea.codigo_proveedor) : null
     if (alias) {
       resultado.push({ ...base, producto_id: alias.producto_id, autoMatcheado: true, score: 100, confianza: "alta", motivo: "Producto reconocido mediante historial del proveedor.", fuente: "alias" })
       continue
     }
 
-    const match = smartMatch(linea.descripcion, productos)
+    const match = smartMatch(descripcion, productos)
     if (match.confianza === "alta" && match.producto) {
       resultado.push({ ...base, producto_id: match.producto.id, autoMatcheado: true, score: match.score, confianza: "alta", motivo: match.motivo, fuente: "smartmatch" })
     } else if (match.confianza === "media" && match.producto) {
