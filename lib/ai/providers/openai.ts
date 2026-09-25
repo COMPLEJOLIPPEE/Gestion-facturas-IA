@@ -14,7 +14,7 @@ const cargoSchema = {
 const openAISchema = {
   type: "object",
   properties: {
-    proveedor_nombre: { type: ["string", "null"] }, numero: { type: ["string", "null"] }, fecha: { type: ["string", "null"] }, fecha_vencimiento: { type: ["string", "null"] },
+    proveedor_nombre: { type: ["string", "null"] }, empresa_receptora_nombre: { type: ["string", "null"] }, numero: { type: ["string", "null"] }, fecha: { type: ["string", "null"] }, fecha_vencimiento: { type: ["string", "null"] },
     subtotal_bruto: { type: ["number", "null"] }, descuento_total: { type: ["number", "null"] }, subtotal_neto: { type: ["number", "null"] }, iva_total: { type: ["number", "null"] }, impuestos_internos_total: { type: ["number", "null"] },
     percepciones: cargoSchema, otros_cargos: cargoSchema, cargos: cargoSchema, total: { type: ["number", "null"] },
     lineas: {
