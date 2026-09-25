@@ -100,6 +100,8 @@ export async function extraerConOCRSpace(
   return {
     proveedor_nombre: null,
 
+    empresa_receptora_nombre: null,
+
     numero:
       parsed.numero ?? null,
 
