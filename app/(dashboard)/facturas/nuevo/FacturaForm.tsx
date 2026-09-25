@@ -185,7 +185,6 @@ const actualizarLinea = (index: number, campo: keyof LineaFactura, valor: string
 
   return (
     <form action={crearFactura} className="space-y-6">
-      <input type="hidden" name="empresa_id" value={empresaId} />
       <input type="hidden" name="items" value={JSON.stringify(calculo.lineas)} />
       <input type="hidden" name="subtotal" value={calculo.subtotalNeto} />
       <input type="hidden" name="iva" value={calculo.iva} />
