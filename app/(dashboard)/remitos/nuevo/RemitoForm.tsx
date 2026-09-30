@@ -15,15 +15,19 @@ type Empresa = { id: string; razon_social: string }
 type Producto = { id: string; nombre: string; codigo: string | null }
 type FormaPago = { id: string; nombre: string }
 
+type FormAction = (formData: FormData) => void | Promise<void>
+
 type Props = {
   proveedores: Proveedor[]
   empresas: Empresa[]
   productos: Producto[]
   formasPago: FormaPago[]
+  formAction?: FormAction
+  initialLineas?: LineaRemito[]
 }
 
-export function RemitoForm({ proveedores, empresas, productos, formasPago }: Props) {
-  const [lineas, setLineas] = useState<LineaRemito[]>([])
+export function RemitoForm({ proveedores, empresas, productos, formasPago, formAction = crearRemito, initialLineas = [] }: Props) {
+  const [lineas, setLineas] = useState<LineaRemito[]>(initialLineas)
   const [productosDisponibles, setProductosDisponibles] = useState<Producto[]>(productos)
   const [proveedorId, setProveedorId] = useState("")
   const [numero, setNumero] = useState("")
@@ -236,7 +240,7 @@ export function RemitoForm({ proveedores, empresas, productos, formasPago }: Pro
   }
 
   return (
-    <form action={crearRemito} className="space-y-6">
+    <form action={formAction} className="space-y-6">
       <input type="hidden" name="items" value={JSON.stringify(lineas)} />
       <input type="hidden" name="subtotal_bruto" value={subtotalBruto} />
       <input type="hidden" name="descuento_total" value={descuentoTotal} />
