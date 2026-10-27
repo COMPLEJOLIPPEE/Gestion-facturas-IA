@@ -226,8 +226,43 @@ CREATE INDEX IF NOT EXISTS gastos_distribuciones_gasto_idx
   ON public.gastos_distribuciones (gasto_id);
 
 -- RLS: la relación empresa-local se protege por empresa.
+ALTER TABLE public.unidades_negocio ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.empresa_unidad_negocio ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.solicitudes_compra ENABLE ROW LEVEL SECURITY;
+
+DROP POLICY IF EXISTS unidades_negocio_select_por_empresa ON public.unidades_negocio;
+CREATE POLICY unidades_negocio_select_por_empresa ON public.unidades_negocio
+  FOR SELECT TO authenticated
+  USING (EXISTS (
+    SELECT 1 FROM public.empresa_unidad_negocio eu
+    WHERE eu.unidad_negocio_id = unidades_negocio.id
+      AND public.usuario_puede_acceder_empresa(eu.empresa_id)
+  ));
+
+DROP POLICY IF EXISTS unidades_negocio_write_por_empresa ON public.unidades_negocio;
+CREATE POLICY unidades_negocio_write_por_empresa ON public.unidades_negocio
+  FOR ALL TO authenticated
+  USING (EXISTS (
+    SELECT 1 FROM public.empresa_unidad_negocio eu
+    WHERE eu.unidad_negocio_id = unidades_negocio.id
+      AND public.usuario_puede_modificar_empresa(eu.empresa_id)
+  ))
+  WITH CHECK (EXISTS (
+    SELECT 1 FROM public.empresa_unidad_negocio eu
+    WHERE eu.unidad_negocio_id = unidades_negocio.id
+      AND public.usuario_puede_modificar_empresa(eu.empresa_id)
+  ));
+
+DROP POLICY IF EXISTS empresa_unidad_negocio_select_empresa ON public.empresa_unidad_negocio;
+CREATE POLICY empresa_unidad_negocio_select_empresa ON public.empresa_unidad_negocio
+  FOR SELECT TO authenticated
+  USING (public.usuario_puede_acceder_empresa(empresa_id));
+
+DROP POLICY IF EXISTS empresa_unidad_negocio_write_empresa ON public.empresa_unidad_negocio;
+CREATE POLICY empresa_unidad_negocio_write_empresa ON public.empresa_unidad_negocio
+  FOR ALL TO authenticated
+  USING (public.usuario_puede_modificar_empresa(empresa_id))
+  WITH CHECK (public.usuario_puede_modificar_empresa(empresa_id));
 
 DROP POLICY IF EXISTS solicitudes_compra_select_empresa ON public.solicitudes_compra;
 CREATE POLICY solicitudes_compra_select_empresa ON public.solicitudes_compra
@@ -399,5 +434,62 @@ CREATE POLICY gastos_distribuciones_write_empresa ON public.gastos_distribucione
     public.usuario_puede_modificar_empresa(empresa_id)
     AND EXISTS (SELECT 1 FROM public.gastos g WHERE g.id = gastos_distribuciones.gasto_id AND g.empresa_id = gastos_distribuciones.empresa_id)
   );
+
+ 
+-- Aprobaciones: un usuario común no puede aprobar/rechazar cambiando el estado
+-- directamente desde la API. El rol se consulta sin asumir una columna específica
+-- para el nombre del rol en usuario_empresa.
+CREATE OR REPLACE FUNCTION public.compras_usuario_puede_aprobar(p_empresa_id uuid)
+RETURNS boolean
+LANGUAGE sql
+STABLE
+SECURITY DEFINER
+SET search_path = public
+AS $
+  SELECT EXISTS (
+    SELECT 1
+    FROM public.usuario_empresa ue
+    WHERE ue.usuario_id = auth.uid()
+      AND ue.empresa_id = p_empresa_id
+      AND ue.activo = true
+      AND lower(coalesce(to_jsonb(ue)->>'rol', to_jsonb(ue)->>'role', '')) IN ('admin', 'superadmin')
+  );
+$;
+
+CREATE OR REPLACE FUNCTION public.compras_validar_aprobacion()
+RETURNS trigger
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $
+BEGIN
+  IF auth.uid() IS NULL THEN
+    RETURN NEW;
+  END IF;
+
+  IF (
+    NEW.estado IS DISTINCT FROM OLD.estado
+    OR NEW.aprobado_por IS DISTINCT FROM OLD.aprobado_por
+    OR NEW.aprobado_at IS DISTINCT FROM OLD.aprobado_at
+  ) AND (
+    NEW.estado IN ('aprobada', 'rechazada')
+  ) AND NOT public.compras_usuario_puede_aprobar(NEW.empresa_id) THEN
+    RAISE EXCEPTION 'No tenés permisos para aprobar o rechazar compras de esta empresa.'
+      USING ERRCODE = '42501';
+  END IF;
+
+  RETURN NEW;
+END;
+$;
+
+DROP TRIGGER IF EXISTS solicitudes_compra_validar_aprobacion ON public.solicitudes_compra;
+CREATE TRIGGER solicitudes_compra_validar_aprobacion
+  BEFORE UPDATE ON public.solicitudes_compra
+  FOR EACH ROW EXECUTE FUNCTION public.compras_validar_aprobacion();
+
+DROP TRIGGER IF EXISTS ordenes_compra_validar_aprobacion ON public.ordenes_compra;
+CREATE TRIGGER ordenes_compra_validar_aprobacion
+  BEFORE UPDATE ON public.ordenes_compra
+  FOR EACH ROW EXECUTE FUNCTION public.compras_validar_aprobacion();
 
 COMMIT;
