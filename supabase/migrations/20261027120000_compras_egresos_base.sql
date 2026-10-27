@@ -95,8 +95,8 @@ CREATE TABLE IF NOT EXISTS public.ordenes_compra (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT ordenes_compra_unidad_empresa_fk
-    FOREIGN KEY (unidad_negocio_id, empresa_id)
-    REFERENCES public.unidades_negocio(id, empresa_id) ON DELETE RESTRICT,
+    FOREIGN KEY (empresa_id, unidad_negocio_id)
+    REFERENCES public.empresa_unidad_negocio(empresa_id, unidad_negocio_id) ON DELETE RESTRICT,
   CONSTRAINT ordenes_compra_estado_check
     CHECK (estado IN ('borrador','pendiente_aprobacion','aprobada','enviada','parcialmente_recibida','recibida','cerrada','cancelada')),
   CONSTRAINT ordenes_compra_importes_check
@@ -165,8 +165,8 @@ CREATE TABLE IF NOT EXISTS public.gastos (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT gastos_unidad_empresa_fk
-    FOREIGN KEY (unidad_negocio_id, empresa_id)
-    REFERENCES public.unidades_negocio(id, empresa_id) ON DELETE RESTRICT,
+    FOREIGN KEY (empresa_id, unidad_negocio_id)
+    REFERENCES public.empresa_unidad_negocio(empresa_id, unidad_negocio_id) ON DELETE RESTRICT,
   CONSTRAINT gastos_importe_check CHECK (importe >= 0),
   CONSTRAINT gastos_estado_check CHECK (estado IN ('pendiente','parcial','pagado','vencido','anulado')),
   CONSTRAINT gastos_frecuencia_check
@@ -393,11 +393,11 @@ CREATE POLICY gastos_distribuciones_write_empresa ON public.gastos_distribucione
   FOR ALL TO authenticated
   USING (
     public.usuario_puede_modificar_empresa(empresa_id)
-    AND EXISTS (SELECT 1 FROM public.gastos g WHERE g.id = gasto_id AND g.empresa_id = empresa_id)
+    AND EXISTS (SELECT 1 FROM public.gastos g WHERE g.id = gastos_distribuciones.gasto_id AND g.empresa_id = gastos_distribuciones.empresa_id)
   )
   WITH CHECK (
     public.usuario_puede_modificar_empresa(empresa_id)
-    AND EXISTS (SELECT 1 FROM public.gastos g WHERE g.id = gasto_id AND g.empresa_id = empresa_id)
+    AND EXISTS (SELECT 1 FROM public.gastos g WHERE g.id = gastos_distribuciones.gasto_id AND g.empresa_id = gastos_distribuciones.empresa_id)
   );
 
 COMMIT;
