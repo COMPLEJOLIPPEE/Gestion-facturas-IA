@@ -12,20 +12,26 @@ CREATE UNIQUE INDEX IF NOT EXISTS empresas_cuit_unique
   ON public.empresas (cuit)
   WHERE cuit IS NOT NULL AND btrim(cuit) <> '';
 
--- Una empresa legal puede tener varias unidades de negocio.
+-- Compatibilidad: unidades_negocio ya existe en desarrollo y se relaciona
+-- con empresas mediante empresa_unidad_negocio. No se cambia su estructura.
 CREATE TABLE IF NOT EXISTS public.unidades_negocio (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  empresa_id uuid NOT NULL REFERENCES public.empresas(id) ON DELETE RESTRICT,
-  nombre text NOT NULL,
-  codigo text NOT NULL,
-  descripcion text,
+  nombre text NOT NULL UNIQUE,
+  tipo text,
   activo boolean NOT NULL DEFAULT true,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS public.empresa_unidad_negocio (
+  empresa_id uuid NOT NULL REFERENCES public.empresas(id) ON DELETE CASCADE,
+  unidad_negocio_id uuid NOT NULL REFERENCES public.unidades_negocio(id) ON DELETE CASCADE,
+  activo boolean NOT NULL DEFAULT true,
+  fecha_desde date NOT NULL DEFAULT CURRENT_DATE,
+  fecha_hasta date,
   created_at timestamptz NOT NULL DEFAULT now(),
-  updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT unidades_negocio_empresa_codigo_unique UNIQUE (empresa_id, codigo),
-  CONSTRAINT unidades_negocio_id_empresa_unique UNIQUE (id, empresa_id),
-  CONSTRAINT unidades_negocio_nombre_no_vacio CHECK (btrim(nombre) <> ''),
-  CONSTRAINT unidades_negocio_codigo_no_vacio CHECK (btrim(codigo) <> '')
+  PRIMARY KEY (empresa_id, unidad_negocio_id),
+  CONSTRAINT empresa_unidad_negocio_fechas_check
+    CHECK (fecha_hasta IS NULL OR fecha_hasta >= fecha_desde)
 );
 
 -- Solicitudes internas: todavía no representan una compra comprometida.
@@ -44,8 +50,8 @@ CREATE TABLE IF NOT EXISTS public.solicitudes_compra (
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
   CONSTRAINT solicitudes_compra_unidad_empresa_fk
-    FOREIGN KEY (unidad_negocio_id, empresa_id)
-    REFERENCES public.unidades_negocio(id, empresa_id) ON DELETE RESTRICT,
+    FOREIGN KEY (empresa_id, unidad_negocio_id)
+    REFERENCES public.empresa_unidad_negocio(empresa_id, unidad_negocio_id) ON DELETE RESTRICT,
   CONSTRAINT solicitudes_compra_estado_check
     CHECK (estado IN ('borrador','pendiente','aprobada','rechazada','ordenada','cancelada')),
   CONSTRAINT solicitudes_compra_numero_empresa_unique UNIQUE (empresa_id, numero)
@@ -184,6 +190,26 @@ CREATE TABLE IF NOT EXISTS public.gastos_pagos (
   CONSTRAINT gastos_pagos_monto_check CHECK (monto > 0)
 );
 
+-- Distribución analítica de un gasto compartido: no duplica la obligación ni el pago.
+CREATE TABLE IF NOT EXISTS public.gastos_distribuciones (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  gasto_id uuid NOT NULL REFERENCES public.gastos(id) ON DELETE CASCADE,
+  empresa_id uuid NOT NULL REFERENCES public.empresas(id) ON DELETE RESTRICT,
+  unidad_negocio_id uuid NOT NULL,
+  importe numeric(14,2) NOT NULL,
+  porcentaje numeric(7,4),
+  observaciones text,
+  created_at timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT gastos_distribuciones_importe_check CHECK (importe > 0),
+  CONSTRAINT gastos_distribuciones_porcentaje_check
+    CHECK (porcentaje IS NULL OR (porcentaje > 0 AND porcentaje <= 100)),
+  CONSTRAINT gastos_distribuciones_gasto_unidad_unique
+    UNIQUE (gasto_id, empresa_id, unidad_negocio_id),
+  CONSTRAINT gastos_distribuciones_unidad_empresa_fk
+    FOREIGN KEY (empresa_id, unidad_negocio_id)
+    REFERENCES public.empresa_unidad_negocio(empresa_id, unidad_negocio_id) ON DELETE RESTRICT
+);
+
 CREATE INDEX IF NOT EXISTS solicitudes_compra_empresa_estado_idx
   ON public.solicitudes_compra (empresa_id, estado, created_at DESC);
 CREATE INDEX IF NOT EXISTS ordenes_compra_empresa_estado_fecha_idx
@@ -196,28 +222,12 @@ CREATE INDEX IF NOT EXISTS gastos_empresa_estado_vencimiento_idx
   ON public.gastos (empresa_id, estado, fecha_vencimiento);
 CREATE INDEX IF NOT EXISTS gastos_pagos_gasto_fecha_idx
   ON public.gastos_pagos (gasto_id, fecha DESC);
+CREATE INDEX IF NOT EXISTS gastos_distribuciones_gasto_idx
+  ON public.gastos_distribuciones (gasto_id);
 
--- RLS: acceso de lectura por empresa y escritura según la función de permisos existente.
-ALTER TABLE public.unidades_negocio ENABLE ROW LEVEL SECURITY;
+-- RLS: la relación empresa-local se protege por empresa.
+ALTER TABLE public.empresa_unidad_negocio ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.solicitudes_compra ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.solicitud_compra_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.ordenes_compra ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.orden_compra_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.recepciones_compra ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.recepcion_compra_items ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.gastos ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.gastos_pagos ENABLE ROW LEVEL SECURITY;
-
-DROP POLICY IF EXISTS unidades_negocio_select_empresa ON public.unidades_negocio;
-CREATE POLICY unidades_negocio_select_empresa ON public.unidades_negocio
-  FOR SELECT TO authenticated
-  USING (public.usuario_puede_acceder_empresa(empresa_id));
-
-DROP POLICY IF EXISTS unidades_negocio_write_empresa ON public.unidades_negocio;
-CREATE POLICY unidades_negocio_write_empresa ON public.unidades_negocio
-  FOR ALL TO authenticated
-  USING (public.usuario_puede_modificar_empresa(empresa_id))
-  WITH CHECK (public.usuario_puede_modificar_empresa(empresa_id));
 
 DROP POLICY IF EXISTS solicitudes_compra_select_empresa ON public.solicitudes_compra;
 CREATE POLICY solicitudes_compra_select_empresa ON public.solicitudes_compra
@@ -372,5 +382,22 @@ CREATE POLICY gastos_pagos_write_empresa ON public.gastos_pagos
     WHERE g.id = gasto_id
       AND public.usuario_puede_modificar_empresa(g.empresa_id)
   ));
+
+DROP POLICY IF EXISTS gastos_distribuciones_select_empresa ON public.gastos_distribuciones;
+CREATE POLICY gastos_distribuciones_select_empresa ON public.gastos_distribuciones
+  FOR SELECT TO authenticated
+  USING (public.usuario_puede_acceder_empresa(empresa_id));
+
+DROP POLICY IF EXISTS gastos_distribuciones_write_empresa ON public.gastos_distribuciones;
+CREATE POLICY gastos_distribuciones_write_empresa ON public.gastos_distribuciones
+  FOR ALL TO authenticated
+  USING (
+    public.usuario_puede_modificar_empresa(empresa_id)
+    AND EXISTS (SELECT 1 FROM public.gastos g WHERE g.id = gasto_id AND g.empresa_id = empresa_id)
+  )
+  WITH CHECK (
+    public.usuario_puede_modificar_empresa(empresa_id)
+    AND EXISTS (SELECT 1 FROM public.gastos g WHERE g.id = gasto_id AND g.empresa_id = empresa_id)
+  );
 
 COMMIT;
